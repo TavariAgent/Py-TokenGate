@@ -1,5 +1,3 @@
-from token_system import task_token_guard
-
 # TokenGate
 
 Welcome to the TokenGate repository.
