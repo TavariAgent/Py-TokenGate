@@ -1,3 +1,5 @@
+from token_system import task_token_guard
+
 # TokenGate
 
 Welcome to the TokenGate repository.
@@ -17,3 +19,58 @@ If you'd like the fuller overview, please start here:
 You can also browse the code, run the demos, and see what the idea   
 is aiming toward. If anything here is useful, interesting, or sparks   
 an idea, that already makes this project worthwhile.
+
+---
+
+## How to Use (Two Versions, Two Decorators)
+> ### Note: Do not attempt to decorate an async fucntion.
+>
+> #### *The token decorator uses asyncio, but the decorated function itself should be synchronous.* 
+
+```python
+#  -- Python 3.12 -- #
+import asyncio
+from operations_coordinator import OperationsCoordinator
+from token_system import task_token_guard
+
+# CPU only 'weight' options: 'light', 'medium', 'heavy'
+# CPU only example:
+@task_token_guard(operation_type='string_ops', tags={'weight': 'light'})
+def string_operation_task(task_data):
+    # Simulate a task for threading
+    return result
+
+# IO writer counts for 'storage_speed':
+# 'SLOW' (10 writes), 'MODERATE'(25 writes), 
+# 'FAST' (50 writes), 'INSANE' (70 writes) <- CAUTION
+# CPU and IO combined example:
+@task_token_guard(operation_type='data_processing', 
+                  tags={'weight': 'heavy', 'storage_speed': 'MODERATE'})
+def data_processing_task(task_data):
+    # Simulate a data processing task
+    return result
+
+# Usage #1 (optimal - most inclusive):
+async def main():
+    coordinator = OperationsCoordinator()
+    coordinator.start()
+    try: 
+    # Normal main body
+    finally:
+        coordinator.stop()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
+# Usage #2 (simpler - less inclusive):
+def main():
+    coordinator = OperationsCoordinator()
+    coordinator.start()
+    try: 
+    # Normal main body
+    finally:
+        coordinator.stop()
+        
+if __name__ == "__main__":
+    main()
+```
