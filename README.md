@@ -2,6 +2,20 @@
 
 Welcome to the TokenGate repository.
 
+---
+
+### What it is:
+
+A small experimental system for routing decorated synchronous functions  
+through a token-managed concurrency model. It is intended to operate as  
+its own concurrency workflow rather than alongside normal threading patterns.  
+
+### What it is not:
+
+It is not presented as production code.
+
+### Overview:
+
 TokenGate is an exploration of token-managed concurrency: a   
 concept for coordinating async orchestration with thread-backed   
 work in a structured way.
@@ -14,9 +28,8 @@ If you'd like the fuller overview, please start here:
 
 - [Proof of Concept](./proof-of-concept.md)
 
-You can also browse the code, run the demos, and see what the idea   
-is aiming toward. If anything here is useful, interesting, or sparks   
-an idea, that already makes this project worthwhile.
+ If anything here is useful, interesting, or sparks an   
+ idea, that already makes this project worthwhile.
 
 ---
 
@@ -72,3 +85,17 @@ def main():
 if __name__ == "__main__":
     main()
 ```
+
+---
+
+## Project status
+
+TokenGate is an active proof of concept.
+
+Current focus:
+- Refine the core concurrency model
+- Improve system operability and confirm WebSocket behavior
+- Test the decorator/coordinator workflow
+- Gather feedback on API clarity and usability
+
+This is a base architecture, not a finished product.
