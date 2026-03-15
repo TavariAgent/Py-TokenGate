@@ -48,6 +48,8 @@ To show the productivity of TokenGate by simulating various workloads.
 
 ### Task Simulation:
 
+***All tasks were submitted on an 8 core Ryzen 7800X3D***
+
 > #### Tasks were simulated to reflect real-world workloads, call chains, and concurrency.
 
 ```terminaloutput
