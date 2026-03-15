@@ -12,7 +12,7 @@ and resolution.**
 ### Overview of Documented Proofs: 
 
 1. Productivity and methodology with results
-2. Task acceptance criteria and setup
+2. Task acceptance criteria and setup for usage
 3. Event bus correctness and concurrency
 4. WebSocket interface for task orchestration (under construction)
 5. Product safety and failure/recovery mechanisms  
@@ -21,8 +21,6 @@ and resolution.**
 ---
 
 ## 1. Productivity
-
-
 
 ### Overview:
 
@@ -111,7 +109,7 @@ PARALLEL CHAINS PASSED — chains concurrent, steps ordered within each.
 
 ### Usage:
 
-> #### Example usage of token-threaded tasks in a saturated scenario.
+> #### Example of token-threaded tasks in a saturated scenario.
 
 ```python
 import time
@@ -216,15 +214,6 @@ MIXED ORCHESTRATOR COMPLETE
     heavy_operation                       284  ████████████████████████████████████████████████████████
   
 ```
----
-
-### Performance Notes:
-
-> During saturated burst conditions on an 8-core CPU, TokenGate achieved a measured concurrency ratio   
-> of 7.25× versus the serial estimate. This does not imply perfect 8-core utilization at every instant,  
-> but it does demonstrate strong real-world parallel overlap and substantial wall-clock compression.   
-> In practical terms, the system delivered roughly 725% of single-thread baseline throughput, or about 90%  
-> of the theoretical 8× ceiling, while maintaining continuous worker activity.
 
 ---
 
