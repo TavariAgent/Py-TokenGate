@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TokenGate - Live Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body class="dashboard-page">
+    <nav class="navbar">
+        <div class="nav-brand">
+            <h1>⚡ TokenGate Dashboard</h1>
+            <span class="status-indicator" id="connection-status">●</span>
+        </div>
+        <div class="nav-controls">
+            <button class="btn btn-small" onclick="toggleControls()">Controls</button>
+            <a href="{{ url_for('logout') }}" class="btn btn-small btn-secondary">Logout</a>
+        </div>
+    </nav>
+    
+    <div class="dashboard-grid">
+        <!-- System Status -->
+        <div class="panel panel-primary">
+            <div class="panel-header">
+                <h3>System Status</h3>
+                <span class="update-time" id="update-time">--:--:--</span>
+            </div>
+            <div class="panel-body">
+                <div class="metric">
+                    <span class="metric-label">Workers</span>
+                    <span class="metric-value" id="workers-total">--</span>
+                    <small class="metric-detail" id="workers-detail">-- busy / -- idle</small>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Physical Cores</span>
+                    <span class="metric-value" id="cores-count">--</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Active Pattern</span>
+                    <span class="metric-value" id="worker-pattern">--</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Uptime</span>
+                    <span class="metric-value" id="uptime">--</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Token Pool -->
+        <div class="panel panel-info">
+            <div class="panel-header">
+                <h3>Token Pool</h3>
+            </div>
+            <div class="panel-body">
+                <div class="metric">
+                    <span class="metric-label">Total Created</span>
+                    <span class="metric-value" id="tokens-created">--</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Waiting</span>
+                    <span class="metric-value metric-warning" id="tokens-waiting">--</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Executing</span>
+                    <span class="metric-value metric-primary" id="tokens-executing">--</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Completed</span>
+                    <span class="metric-value metric-success" id="tokens-completed">--</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Failed</span>
+                    <span class="metric-value metric-danger" id="tokens-failed">--</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Core Affinity -->
+        <div class="panel panel-core">
+            <div class="panel-header">
+                <h3>Core Affinity Distribution</h3>
+            </div>
+            <div class="panel-body">
+                <div id="core-affinity-container">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Guard House -->
+        <div class="panel panel-guard">
+            <div class="panel-header">
+                <h3>Guard House Status</h3>
+            </div>
+            <div class="panel-body">
+                <div class="metric">
+                    <span class="metric-label">Methods Tracked</span>
+                    <span class="metric-value" id="guard-methods">--</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Executions</span>
+                    <span class="metric-value" id="guard-executions">--</span>
+                </div>
+                <div class="health-distribution" id="health-distribution">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Executions -->
+        <div class="panel panel-full">
+            <div class="panel-header">
+                <h3>Recent Executions</h3>
+            </div>
+            <div class="panel-body">
+                <div class="execution-list" id="execution-list">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+
+                <!-- Task Launcher Panel -->
+        <div class="panel panel-full panel-launcher">
+            <div class="panel-header">
+                <h3>🚀 Task Launcher</h3>
+                <button class="btn btn-small" onclick="refreshLauncher()">↻ Refresh</button>
+            </div>
+            <div class="panel-body">
+                <div id="launcher-container">
+                    <p style="color: #64748b; text-align: center; padding: 20px;">
+                        Loading tasks...
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Overflow Guard -->
+        <div class="panel panel-overflow">
+            <div class="panel-header">
+                <h3>Overflow Guard</h3>
+            </div>
+            <div class="panel-body">
+                <div class="metric">
+                    <span class="metric-label">Inspections</span>
+                    <span class="metric-value" id="overflow-inspections">--</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Retries Created</span>
+                    <span class="metric-value" id="overflow-retries">--</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Retries Succeeded</span>
+                    <span class="metric-value metric-success" id="overflow-succeeded">--</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Retries Exhausted</span>
+                    <span class="metric-value metric-danger" id="overflow-exhausted">--</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Admission Gate -->
+        <div class="panel panel-gate">
+            <div class="panel-header">
+                <h3>Admission Gate</h3>
+            </div>
+            <div class="panel-body">
+                <div class="metric">
+                    <span class="metric-label">Total Admitted</span>
+                    <span class="metric-value" id="gate-admitted">--</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Expired</span>
+                    <span class="metric-value" id="gate-expired">--</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Current Rate</span>
+                    <span class="metric-value" id="gate-rate">--/s</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Admin Controls Modal -->
+    <div id="controls-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Admin Controls</h2>
+                <button class="close-btn" onclick="toggleControls()">×</button>
+            </div>
+            <div class="modal-body">
+
+                <!-- SECTION 1 -->
+                <div class="control-section">
+                    <h3>Admission Control</h3>
+                    <button class="btn btn-warning" onclick="pauseAdmission()">Pause Admission</button>
+                    <button class="btn btn-success" onclick="resumeAdmission()">Resume Admission</button>
+                </div>
+
+                <!-- SECTION 2 -->
+                <div class="control-section">
+                    <h3>Kill Operations</h3>
+                    <div class="form-group">
+                        <label>Operation Type</label>
+                        <input type="text" id="kill-operation-input" placeholder="e.g., json_generation">
+                        <button class="btn btn-danger" onclick="killOperation()">Kill All of Type</button>
+                    </div>
+                </div>
+
+                <!-- SECTION 3 -->
+                <div class="control-section">
+                    <h3>Emergency Controls</h3>
+                    <button class="btn btn-danger-alt" onclick="drainPool()">Drain Pool (Kill All Waiting)</button>
+                </div>
+
+                <!-- SECTION 4 -->
+                <div class="control-section">
+                    <h3>Developer Tools</h3>
+                    <button class="btn btn-primary" onclick="dumpHistory()">📥 Dump Execution History</button>
+                    <p style="color: #64748b; font-size: 0.85em; margin-top: 10px;">
+                        Run tests and export execution history for debugging
+                    </p>
+                </div>
+
+            </div> <!-- closes modal-body -->
+        </div> <!-- closes modal-content -->
+    </div> <!-- closes controls-modal -->
+
+    <!-- SCRIPTS -->
+    <script>
+        function dumpHistory() {
+            fetch('/api/admin/dump_history', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`✅ Execution history dumped!\n\nFile: ${data.filepath}\n\nCheck your TokenGate directory.`);
+                } else {
+                    alert(`❌ Error: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                alert(`❌ Network error: ${error.message}`);
+            });
+        }
+
+        function runTest() {
+            if (!confirm('Run no_io_test? This will execute 138 tasks in the GUI process.')) {
+                return;
+            }
+
+            fetch('/api/test/run_io_test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert(`✅ ${data.message}\n\nCheck the dashboard for live execution data!`);
+                } else {
+                    alert(`❌ Error: ${data.error}\n\nCheck console for details.`);
+                    console.error('Test error:', data);
+                }
+            })
+            .catch(error => {
+                alert(`❌ Network error: ${error.message}`);
+                console.error('Network error:', error);
+            });
+        }
+    </script>
+
+    <!-- EXISTING DASHBOARD SCRIPT -->
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>

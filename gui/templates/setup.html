@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TokenGate - First Run Setup</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="auth-page">
+    <div class="auth-container">
+        <div class="auth-box">
+            <div class="logo">
+                <h1>⚡ TokenGate</h1>
+                <p class="tagline">Competition Returned to the People</p>
+            </div>
+            
+            <h2>First Run Setup</h2>
+            <p class="info">Set your admin password to secure the dashboard</p>
+            
+            {% if error %}
+            <div class="error-message">
+                {{ error }}
+            </div>
+            {% endif %}
+            
+            <form method="POST" action="{{ url_for('setup') }}">
+                <div class="form-group">
+                    <label for="password">Admin Password</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password" 
+                        placeholder="Enter password (min 8 characters)"
+                        required
+                        minlength="8"
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="confirm">Confirm Password</label>
+                    <input 
+                        type="password" 
+                        id="confirm" 
+                        name="confirm" 
+                        placeholder="Confirm password"
+                        required
+                        minlength="8"
+                    >
+                </div>
+                
+                <div class="form-group checkbox-group">
+                    <label>
+                        <input 
+                            type="checkbox" 
+                            id="whitelist_enabled" 
+                            name="whitelist_enabled"
+                            onchange="toggleWhitelist()"
+                        >
+                        Enable IP Whitelist (Optional)
+                    </label>
+                </div>
+                
+                <div class="form-group" id="whitelist_container" style="display: none;">
+                    <label for="whitelist_ips">Allowed IP Addresses</label>
+                    <textarea 
+                        id="whitelist_ips" 
+                        name="whitelist_ips" 
+                        rows="3"
+                        placeholder="Enter IPs separated by commas (e.g., 192.168.1.100, 10.0.0.50)"
+                    ></textarea>
+                    <small>Leave empty to disable whitelist</small>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    Complete Setup
+                </button>
+            </form>
+            
+            <div class="auth-footer">
+                <p>This password will be required to access the dashboard</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function toggleWhitelist() {
+            const checkbox = document.getElementById('whitelist_enabled');
+            const container = document.getElementById('whitelist_container');
+            container.style.display = checkbox.checked ? 'block' : 'none';
+        }
+        
+        // Password strength indicator
+        const passwordInput = document.getElementById('password');
+        const confirmInput = document.getElementById('confirm');
+        
+        confirmInput.addEventListener('input', function() {
+            if (this.value && this.value !== passwordInput.value) {
+                this.setCustomValidity('Passwords do not match');
+            } else {
+                this.setCustomValidity('');
+            }
+        });
+    </script>
+</body>
+</html>
