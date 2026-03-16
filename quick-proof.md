@@ -45,7 +45,7 @@ self.MAILBOX_MAX = 425
 
 ```python
 # Examples of operations that can be scheduled as a token-managed task.
-from operations_coordinator import task_token_guard
+from token_system import task_token_guard
 
 @task_token_guard(operation_type='simple_loop', tags={'weight': 'light'})
 def simple_operation(n):
