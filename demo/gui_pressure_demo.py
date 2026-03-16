@@ -49,7 +49,7 @@ def cpu_heavy(size: int):
 
 @task_token_guard(
     operation_type='append_log',
-    tags={'weight': 'heavy', 'storage_speed': 'FAST'},
+    tags={'weight': 'heavy', 'storage_speed': 'MODERATE'},
 )
 def append_log(path: str, message: str):
     os.makedirs(os.path.dirname(path), exist_ok=True)
