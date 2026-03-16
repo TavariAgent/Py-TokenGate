@@ -79,7 +79,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         self.core_busy: Dict[int, int] = {c: 0 for c in range(1, self.num_cores + 1)}
 
         # Capped mailbox length to prevent runaway memory (DOS safety)
-        self.MAILBOX_MAX = 120 # Max tokens per worker mailbox
+        self.MAILBOX_MAX = 80 # Max tokens per worker mailbox
 
         self.core_patterns: Dict[int, int] = {}
         for core_id in range(1, num_cores + 1):

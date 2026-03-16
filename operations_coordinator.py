@@ -94,7 +94,7 @@ class OperationsCoordinator:
             enable_convergence: bool = True,
             convergence_verbose: bool = False,
             base_memory_budget_mb: int = 45,
-            num_executors: int = 26,
+            num_executors: int = 8,
             auto_block_dangerous: bool = False,
     ):
         """Initialize the coordinator and construct all runtime components.
