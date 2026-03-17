@@ -1,15 +1,14 @@
 # Quick-Proof: Base TokenGate Architecture  
 
-*"Threading and Asyncio, unified through token managed execution."*
 
 ---
 
 ## Scope
-This example demonstrates the base TokenGate building blocks
-without Guard House, launcher/web flow, or token interception
-patterns. The goal is to show that ordinary Python functions
-can be scheduled as token-managed operations, that CPU-centric
-and I/O-centric workloads can be coordinated together, and that
+This example demonstrates the base of TokenGate and what it does   
+without Guard House, launcher/web flow, or token interception  
+patterns. The goal is to show that ordinary Python functions  
+can be scheduled as token-managed operations, that CPU-centric  
+and I/O-centric workloads can be coordinated together, and that  
 execution remains observable.
 
 ### Claims
@@ -193,7 +192,8 @@ ENDURANCE RUN COMPLETE
 
 > TokenGate is asynchronous at the root. It respects execution limits   
 > and queue pressure automatically, but it does not assume semantic   
-> ordering between ***independent operations***.
+> ordering. Tasks are scheduled as they come, and they execute according to  
+> first come, first served within their routing domain.  
 
 ```python
 @task_token_guard(operation_type='write_json_fast', 
@@ -238,9 +238,10 @@ def write_blob_moderate(path, size_kb):
 > Objective: Coordinate I/O-centric workloads.
 
 ```python
-# Note: If the caller is independent and the callee is a single operation,
-# then the callee does not need to be decorated or token-managed to work with the architecture.
-# The callee could still be decorated, however that isn't a requirement for integration in all cases.
+@task_token_guard(operation_type='json_fast',
+    tags={'weight': 'medium',  # Core routing
+        'storage_speed': 'FAST'  # Storage throttling
+    })# The decorator can activate on synchronous functions only.
 def generate_medium_json(index: int) -> dict:
     """Generate medium-sized JSON (~50KB)."""
     return {
@@ -271,10 +272,7 @@ def generate_medium_json(index: int) -> dict:
         }
     }
 
-@task_token_guard(operation_type='json_fast',
-    tags={'weight': 'medium',  # Core routing
-        'storage_speed': 'FAST'  # Storage throttling
-    })
+# Calling this would still activate the decorator.
 def create_json_file(index: int) -> dict:
     """
     Create a single JSON file with automatic storage throttling.
@@ -443,15 +441,8 @@ layered routing index.
   
 Routing Index: The routing index applies tag-based core selection, storage-speed   
 throttling for I/O tasks, and queue-order handling within each worker domain.  
-The first layer routes tasks to specific cores based on their weight   
-(light, medium, heavy), while the second layer applies storage speed   
-throttling for I/O-bound tasks. The third layer manages task dependencies   
-and execution order within each core's queue.
- 
-> Most notably: *For independent operations, the architecture does not   
-> require the caller to manage concurrency primitives directly.*   
-Only independent operations relying on fixed cadences will be affected  
-> by the use of TokenGate. If you rely on a static time for token delivery  
+
+> If you rely on a static time for token delivery  
 > this must be defined locally in the users' codebase.
 
 ```terminaloutput
@@ -893,11 +884,7 @@ Operations shutdown complete!
 
 What was shown — Ordinary Python functions can be scheduled as   
 token-managed operations, and CPU-centric and I/O-centric workloads   
-can be coordinated under the same execution model.  
-
-In this proof of concept, async admission and thread-backed execution   
-operated together under one token-managed model, with measured   
-completion across CPU-centric, I/O-centric, and mixed workloads.
+can be coordinated under the same execution model.
 
 ---
 
@@ -906,7 +893,7 @@ patterns were excluded from this proof to focus on the core TokenGate
 architecture.
 
 ---
-Next steps — Future proofs will extend this document to cover Guard  
+Next steps — In the future I will extend this document to cover Guard  
 House behavior, launcher/web flow, and token interception patterns,   
 with the goal of presenting the broader architecture in a more   
 complete form.
