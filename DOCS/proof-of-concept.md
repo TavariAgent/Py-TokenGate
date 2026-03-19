@@ -14,7 +14,7 @@ and resolution.**
 1. Productivity and methodology with results
 2. Task acceptance criteria and setup for usage
 3. Event bus correctness and concurrency
-4. WebSocket interface for task orchestration (under construction)
+4. WebSocket interface for task orchestration
 5. Product safety and failure/recovery mechanisms  
 
 
