@@ -111,18 +111,13 @@ class TopologyDetector:
 
     @staticmethod
     def recommend_worker_counts(topology: CPUTopology) -> Dict[str, int]:
-        """
-        Recommend worker counts for different load patterns.
-
-        Returns worker counts for light/medium/heavy workloads
-        based on detected topology.
-        """
         physical = topology.physical_cores
+        smt_mult = topology.smt_ratio if topology.smt_enabled else 1.0
 
         return {
-            'light': physical * 4,  # 4 workers per physical core
-            'medium': physical * 3,  # 3 workers per physical core
-            'heavy': physical * 2  # 2 workers per physical core
+            'light': int(physical * 4 * smt_mult),  # 8 cores × 4 × 2 = 64
+            'medium': int(physical * 3 * smt_mult),  # 8 cores × 3 × 2 = 48
+            'heavy': int(physical * 2 * smt_mult),  # 8 cores × 2 × 2 = 32
         }
 
     @staticmethod

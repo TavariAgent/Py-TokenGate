@@ -232,46 +232,18 @@
         function dumpHistory() {
             fetch('/api/admin/dump_history', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
+                headers: { 'Content-Type': 'application/json' }
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert(`✅ Execution history dumped!\n\nFile: ${data.filepath}\n\nCheck your TokenGate directory.`);
+                    alert(`✅ History dumped!\nFile: ${data.filepath}`);
                 } else {
                     alert(`❌ Error: ${data.error}`);
                 }
             })
             .catch(error => {
                 alert(`❌ Network error: ${error.message}`);
-            });
-        }
-
-        function runTest() {
-            if (!confirm('Run no_io_test? This will execute 138 tasks in the GUI process.')) {
-                return;
-            }
-
-            fetch('/api/test/run_io_test', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    alert(`✅ ${data.message}\n\nCheck the dashboard for live execution data!`);
-                } else {
-                    alert(`❌ Error: ${data.error}\n\nCheck console for details.`);
-                    console.error('Test error:', data);
-                }
-            })
-            .catch(error => {
-                alert(`❌ Network error: ${error.message}`);
-                console.error('Network error:', error);
             });
         }
     </script>

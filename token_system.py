@@ -24,8 +24,7 @@ from typing import Callable, Any, Optional, Dict, ParamSpec, Generic, TypeVar
 
 
 class TokenState(Enum):
-    class TokenState(Enum):
-     """Lifecycle states for a token-managed task.
+    """Lifecycle states for a token-managed task.
 
     Tokens move from creation to admission, execution, and a terminal state.
     Terminal states are COMPLETED, FAILED, KILLED, and TIMEOUT.

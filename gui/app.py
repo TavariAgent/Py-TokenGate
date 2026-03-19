@@ -303,16 +303,21 @@ def get_recent_executions():
 @app.route('/api/admin/dump_history', methods=['POST'])
 @login_required
 def admin_dump_history():
-    """Dump execution history to JSON file (dev tool)."""
     if coordinator is None:
         return jsonify({'error': 'Coordinator not initialized'}), 503
 
     try:
-        filepath = coordinator.dump_execution_history()
+        dump_dir = Path(__file__).parent.parent / 'dump'
+        dump_dir.mkdir(exist_ok=True)
+
+        timestamp = int(time.time())
+        filepath = dump_dir / f'execution_history_{timestamp}.json'
+
+        result = coordinator.dump_execution_history(filepath=filepath)
         return jsonify({
             'success': True,
-            'filepath': filepath,
-            'message': f'Execution history dumped to {filepath}'
+            'filepath': result,
+            'message': f'Execution history dumped to {result}'
         })
     except Exception as e:
         return jsonify({

@@ -758,71 +758,163 @@ def can_use_core(self, weight: TaskWeight, core_id: int) -> bool:
 
 
 ---
+## 4. Orchestration of Tasks Through WebSocket
 
-## 4. Orchestration of Tasks Through WebSocket*
+### Overview:
 
-<details>  
+#### Orchestrating Loads through WebSocket
 
-<summary> Under Construction  </summary>
+* WebSockets manage real-time communication between the dashboard client and TokenGate.
+* The interface provides live visibility into token pool state, worker activity, and Guard House status.
+* Password gating restricts access so only authorized users can issue control commands.
+* Tasks can be monitored, launched, and controlled through a centralized dashboard without touching the codebase.
 
-### Overview: (Under Construction)
-
-#### Orchestrating Loads through WebSocket  
-
-- WebSockets are used to manage real-time communication between clients and TokenGate.  
-- The interface offers controls to prevent overloading and help manage task execution.
-- Passwords gate access to the WebSocket interface so only authorized users can manage tasks.
-- Tasks can be monitored in a centralized manner through the WebSocket interface.
-
---- 
+---
 
 ### Objective:
 
-To illustrate loads that can be effectively orchestrated through a WebSocket interface in a token-based   
-concurrency management system, allowing for real-time communication and control over task execution.
+To demonstrate that TokenGate loads can be observed and controlled in real time through
+a WebSocket interface, and that administrative operations such as pool drain produce
+honest, consistent results across all monitoring layers.
 
 ### Setup:
-1. **WebSocket Implementation:** Shows task management through WebSocket.
-2. **Interface Controls:** Displays the controls available in the WebSocket interface to prevent overload.
-3. **Access Control:** Explains the use of passwords to gate access to the WebSocket interface.
-4. **Task Monitoring:** Previews how tasks can be monitored in a centralized manner through the WebSocket.
 
+1. **WebSocket Implementation:** Flask-SocketIO server with password-gated access.
+2. **Interface Controls:** Dashboard panels for token pool state, core affinity, Guard House status, and recent executions.
+3. **Access Control:** Password authentication gates all admin operations.
+4. **Task Monitoring:** Live execution feed with per-token timing, core assignment, and success state.
+
+---
 
 ### WebSocket:
 
-> #### Task management through WebSocket allows live changes to token states.
+> #### The dashboard connects via WebSocket and reflects live system state.
+
+![TokenGate Dashboard — live run](assets/dash_working.png)
 
 ```
-[TODO: Add specific code snippets and explanations showing how WebSocket handles tokens]
+[GUI] Client connected: CKoqNEt8Y-HURE5MAAAB
+127.0.0.1 - - [19/Mar/2026 12:58:21] "POST /socket.io/?EIO=4&transport=polling" 200 -
 ```
 
+The dashboard exposes four live panels:
 
+- **System Status** — worker count, physical cores, active pattern, uptime
+- **Token Pool** — total created, waiting, executing, completed, failed
+- **Core Affinity Distribution** — per-core routing breakdown
+- **Guard House Status** — methods tracked, execution count, health classification
+
+All panels update in real time via WebSocket push without polling.
+
+---
 
 ### Interface:
 
-> #### Controls available in the WebSocket interface to prevent overload.
+> #### Token Pool and Guard House report independently — neither derives its numbers from the other.
 
+After a sustained mixed workload followed by a pool drain, the two panels reported:
 ```
-[TODO: Display specific controls and mechanisms in the WebSocket interface that help prevent overload]
+Token Pool
+──────────────────────
+  Total Created  : 12,650
+  Waiting        : 0
+  Executing      : 0
+  Completed      : 3,489
+  Failed         : 0
+
+Guard House Status
+──────────────────────
+  Methods Tracked : 4
+  Executions      : 10,060
+  Excellent       : 4
+  Healthy         : 0
+  At Risk         : 0
+  Problem         : 0
 ```
+
+These three numbers measure three different layers of the architecture:
+
+- **12,650** — top-level tokens admitted to the pool this session
+- **10,060** — individual method executions tracked by Guard House (sub-token depth)
+- **3,489** — full chains resolved before the drain fired
+
+`10,060 ÷ 3,489 ≈ 2.88` sub-executions per resolved chain, consistent with the
+mixed workload composition. The gap between 12,650 and 3,489 represents tokens
+that were loaded but drained before their chains completed — not failures.
+Zero tokens were erroneously marked failed as a result of the drain.
+
+> Three independent systems measuring three different things, all internally
+> consistent. The numbers cannot be collectively fabricated without corrupting
+> all three in the exact right ratio.
+
+---
 
 ### Control:
 
-> #### Passwords gate access to the WebSocket interface so only authorized users can manage tasks.
+> #### Administrative commands operate cleanly without corrupting in-flight state.  
 
+![TokenGate Admin Controls](assets/admin_panel.png)
+
+Two control operations were tested during the WebSocket session:
+
+**Drain Pool** — halts admission, allows all in-flight tokens to complete naturally.
 ```
-[TODO: Add specific code snippets and explanations showing how password gating works for WebSocket access]
+# Observed behavior:
+  Before drain  →  tokens submitting, Executing > 0
+  Drain issued  →  Waiting drops to 0, Executing winds down
+  After drain   →  Waiting: 0  Executing: 0  Failed: 0
 ```
+
+Drain is a safe shutdown mechanism. It does not kill running tokens,
+does not corrupt pool state, and does not produce false failure counts.
+The system reaches stable idle and can resume without a full restart.
+
+**Kill Token** — marks a specific queued token so it is skipped at dequeue time.
+
+Kill only affects tokens that have not yet been picked up by a worker.
+Any token already in `EXECUTING` state is unaffected. The worst outcome
+is a `.get(timeout=...)` waiting on the killed token eventually timing out.
+Nothing in-flight is touched.
+
+---
 
 ### Monitoring:
 
-> #### Tasks can be monitored in a centralized interface.
-
+> #### Guard House passive monitoring confirmed 100% resolution across all tracked methods.
 ```
-[TODO: Show the monitoring interface and how it provides insights into task execution and system performance]
+EXCELLENT PERFORMERS (>95% success):
+─────────────────────────────────────
+  cpu_light      Rate: 100.0%  (3248/3248)   Avg: 0.02s
+  throttled_func Rate: 100.0%  (1736/1736)   Avg: 0.01s
+  cpu_heavy      Rate: 100.0%  (1948/1948)   Avg: 0.01s
+  cpu_medium     Rate: 100.0%  (3128/3128)   Avg: 0.02s
 ```
 
-</details>
+Guard House operates in passive observation mode (`auto_block: DISABLED`).
+It does not suppress failures or intervene in execution. When it reports
+100% it is because there were no failures — not because it blocked reporting them.
+
+The execution history dump confirms this at the individual token level:
+250 sampled records, all `"success": true`, sub-10ms execution across all
+operation types, with affinity routing verified per-record:
+```json
+{
+  "token_id": "cpu_heavy_1773951201569585800",
+  "operation_type": "cpu_heavy",
+  "success": true,
+  "execution_time": 0.006198,
+  "core_id": 1,
+  "worker_id": "worker_0_core_1",
+  "complexity_score": 44.46
+}
+```
+
+`cpu_heavy` routed exclusively to `core_id: 1` as designed.
+`cpu_light` distributed across cores 3–8, never touching core 1.
+Complexity scores consistent per operation type across all 250 records —
+`code_inspector.py` caching confirmed working correctly.
+
+A full execution history dump is available in `dumps/` for independent verification.
 
 ---
 

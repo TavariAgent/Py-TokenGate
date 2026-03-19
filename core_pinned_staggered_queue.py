@@ -79,7 +79,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         self.core_busy: Dict[int, int] = {c: 0 for c in range(1, self.num_cores + 1)}
 
         # Capped mailbox length to prevent runaway memory (DOS safety)
-        self.MAILBOX_MAX = 80 # Max tokens per worker mailbox
+        self.MAILBOX_MAX = 100 # Max tokens per worker mailbox
 
         self.core_patterns: Dict[int, int] = {}
         for core_id in range(1, num_cores + 1):
@@ -499,7 +499,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
 
         print(f"[CORE_PINNED_QUEUE] Started {self.total_workers} workers across {self.num_cores} cores")
 
-    async def _worker_loop(self, worker_idx: int, worker_id: str, core_id: int, local_i: int):
+    async def _worker_loop(self, worker_idx: int, worker_id: str, core_id: int, local_i: int): # DO NOT REMOVE "worker_idx"!
         """Continuously consume one mailbox and execute admitted tokens."""
         q = self.mailboxes[(core_id, local_i)]
         print(f"[{worker_id}] Started on Core {core_id} (local {local_i})")

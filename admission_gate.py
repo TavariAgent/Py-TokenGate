@@ -137,7 +137,7 @@ class WorkerTaskQueue:
         self.total_failed = 0
 
     async def start(self, num_executors: int = 4):
-
+        """Subclass-specific startup logic to initialize worker mailboxes and execution tasks."""
         raise NotImplementedError("Subclass must implement start()")
 
     async def stop(self):

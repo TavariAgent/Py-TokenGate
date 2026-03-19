@@ -14,7 +14,9 @@ execution remains observable.
 ### Claims
 1. Ordinary Python functions can be scheduled as token-managed operations.
 2. TokenGate displays use of CPU and I/O workloads under one execution model.
-3. Execution remains observable through routing, worker, and shutdown logs.
+3. Execution remains observable through routing, worker, and shutdown logs.  
+
+
 ---
 
 ## Proof 1: CPU-Based Operation Scheduling 
@@ -73,6 +75,7 @@ def heavy_operation(iterations):
         result += sum(j ** 2 for j in range(100))
     return result
 ```
+
 > Setup: Definition of CPU functions and scheduled as token-managed tasks.
 
 ```python
@@ -894,9 +897,10 @@ architecture.
 
 ---
 Next steps — In the future I will extend this document to cover Guard  
-House behavior, launcher/web flow, and token interception patterns,   
-with the goal of presenting the broader architecture in a more   
-complete form.
+House behavior, launcher/web flow, and token interception patterns,  
+with the goal of presenting the broader architecture in a more  
+complete form. For the complete architecture including WebSocket  
+orchestration and recovery mechanisms, see [proof-of-concept.md](proof-of-concept.md).  
 
 The goal will be to demonstrate how the full architecture works   
 together, and to provide a more comprehensive understanding of the   

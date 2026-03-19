@@ -93,8 +93,8 @@ class OperationsCoordinator:
             workers_per_core: int = 4,
             enable_convergence: bool = True,
             convergence_verbose: bool = False,
-            base_memory_budget_mb: int = 45,
-            num_executors: int = 8,
+            base_memory_budget_mb: int = 65,
+            num_executors: int = 6,
             auto_block_dangerous: bool = False,
     ):
         """Initialize the coordinator and construct all runtime components.
@@ -162,7 +162,7 @@ class OperationsCoordinator:
         # Worker queue - does routing AND execution
         from .core_pinned_staggered_queue import CorePinnedStaggeredQueue
         self.worker_queue = CorePinnedStaggeredQueue(
-            num_cores=self.topology.physical_cores,
+            num_cores=self.topology.logical_cores,
             workers_per_core=self.workers_per_core,
             coordinator=self
         )
