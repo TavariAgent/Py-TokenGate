@@ -26,7 +26,7 @@ exploration.
 
 If you'd like the fuller overview, please start here:
 
-- [Proof of Concept](./proof-of-concept.md)
+- [Proof of Concept](./DOCS/proof-of-concept.md)
 
  If anything here is useful, interesting, or sparks an   
  idea, that already makes this project worthwhile.
