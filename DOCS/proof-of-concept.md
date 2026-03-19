@@ -790,7 +790,7 @@ honest, consistent results across all monitoring layers.
 
 > #### The dashboard connects via WebSocket and reflects live system state.
 
-![TokenGate Dashboard — live run](assets/dash_working.png)
+![TokenGate Dashboard — live run](/assets/dash_working.png)
 
 ```
 [GUI] Client connected: CKoqNEt8Y-HURE5MAAAB
@@ -853,7 +853,7 @@ Zero tokens were erroneously marked failed as a result of the drain.
 
 > #### Administrative commands operate cleanly without corrupting in-flight state.  
 
-![TokenGate Admin Controls](assets/admin_panel.png)
+![TokenGate Admin Controls](/assets/admin_panel.png)
 
 Two control operations were tested during the WebSocket session:
 
