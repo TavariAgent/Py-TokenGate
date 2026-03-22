@@ -34,7 +34,7 @@ If you'd like the fuller overview, please start here:
 ---
 
 ## How to Use (Two Versions, Two Decorators)
-> ### Note: Do not attempt to decorate an async fucntion.
+> ### Note: Do not attempt to decorate an async function.
 >
 > #### *The token decorator uses asyncio, but the decorated function itself should be synchronous.* 
 

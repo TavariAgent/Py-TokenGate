@@ -1,9 +1,7 @@
 # Proof of Concept: TokenGate
 
-**This document presents a proof of concept showing that   
-asyncio-based orchestration and thread-backed execution can   
-be coordinated through token-managed task admission, routing,   
-and resolution.**  
+**This is a proof of async coordination and thread backed execution working  
+using task tokens.**  
 
 ***This is a proof of concept not a finished product.***
 
@@ -622,9 +620,7 @@ def record_task_routed(self, core_id: int, weight: TaskWeight):
         self.total_routed += 1
         self._affinity_counts[core_id][weight.value] += 1    
     
-# Tokens are computed on the correct core based on the assigned worker.
-# Threads handle all token intermediation and transitions, so the   
-# execution function can assume correct core and worker assignment.
+# Async gathers task tokens setting them to the correct state for execution by workers.
 async def _execute_token(self, token: TaskToken, worker_id: str, core_id: int):
     """
     Worker is pre-pinned
@@ -794,7 +790,6 @@ honest, consistent results across all monitoring layers.
 
 ```
 [GUI] Client connected: CKoqNEt8Y-HURE5MAAAB
-127.0.0.1 - - [19/Mar/2026 12:58:21] "POST /socket.io/?EIO=4&transport=polling" 200 -
 ```
 
 The dashboard exposes four live panels:
