@@ -1,15 +1,21 @@
-# Quick-Proof: Base TokenGate Architecture  
-
+# Quick-Proof: TokenGate Architecture
 
 ---
 
+#### Quick Links
+
+- [Proof 1: CPU-Based Operation Scheduling](#proof-1-cpu-based-operation-scheduling-)
+- [Proof 2: I/O-Based Workloads](#proof-2-io-based-workloads)
+- [Proof 3: Mixed Workload Coordination](#proof-3-mixed-workload-coordination)
+- [Proof 4: Observability and Control](#proof-4-observability-and-control)
+- [Conclusion](#conclusion)
+
 ## Scope
-This example demonstrates the base of TokenGate and what it does   
-without Guard House, launcher/web flow, or token interception  
-patterns. The goal is to show that ordinary Python functions  
-can be scheduled as token-managed operations, that CPU-centric  
-and I/O-centric workloads can be coordinated together, and that  
-execution remains observable.
+This example demonstrates the base of TokenGate and what it does without  
+Guard House, launcher/web flow, or token interception patterns. The goal   
+is to show that ordinary Python functions can be scheduled as token-managed   
+operations, that CPU-centric and I/O-centric workloads can be coordinated   
+together, and that execution remains observable.
 
 ### Claims
 1. Ordinary Python functions can be scheduled as token-managed operations.
@@ -34,7 +40,8 @@ execution remains observable.
 > adjustments based on specific workload requirements and system   
 > capabilities.
 
-> **Notably:** *When failure occurs tokens are re-distributed in FIFO and are triggered to re-start interleaved with the current task queue.*
+> **Notably:** *When failure occurs tokens are re-distributed in FIFO and are   
+> triggered to re-start interleaved with the current task queue.*
 
 ```python
 # Optional: cap mailbox length to prevent runaway memory
@@ -186,6 +193,8 @@ ENDURANCE RUN COMPLETE
 
 </details>
 
+[↑ Top](#scope)
+
 ---
 
 ## Proof 2: I/O-Based Workloads
@@ -193,10 +202,9 @@ ENDURANCE RUN COMPLETE
 <details>
 <summary> I/O-Based Workloads  
 
-> TokenGate is asynchronous at the root. It respects execution limits   
-> and queue pressure automatically, but it does not assume semantic   
-> ordering. Tasks are scheduled as they come, and they execute according to  
-> first come, first served within their routing domain.  
+> TokenGate is asynchronous and thread-based, it uses async to manage token delivery and   
+> packaging while the threads operate a pinned worker queue. Each worker monitors a mailbox  
+> with a specific index, and the index directs tokens to the appropriate worker based on tags.
 
 ```python
 @task_token_guard(operation_type='write_json_fast', 
@@ -428,6 +436,8 @@ Submitting 6 tasks → Blob writes
 ```
 </details>
 
+[↑ Top](#scope)
+
 ---
 
 ## Proof 3: Mixed Workload Coordination
@@ -445,8 +455,8 @@ layered routing index.
 Routing Index: The routing index applies tag-based core selection, storage-speed   
 throttling for I/O tasks, and queue-order handling within each worker domain.  
 
-> If you rely on a static time for token delivery  
-> this must be defined locally in the users' codebase.
+> If you rely on a static time for token delivery this must be defined locally   
+> via cadence, timesteps or similar.
 
 ```terminaloutput
 ======================================================================
@@ -667,6 +677,8 @@ MIXED ORCHESTRATOR COMPLETE (bars removed due to length)
 
 </details>
 
+[↑ Top](#scope)
+
 ---
 
 ## Proof 4: Observability and Control
@@ -800,25 +812,12 @@ Operations Coordinator started successfully!
 # control over task flow and improves system stability during high   
 # load periods.  
 
-# To provide visibility into the system's behavior, the current  
-# codebase includes a comprehensive logging system. This system captures   
-# detailed information about task routing, execution, and completion,   
-# allowing administrators to trace the lifecycle of each task and   
-# understand system behavior under different workloads. The logging   
-# system is designed to be configurable, enabling testers to   
-# adjust the level of detail captured based on their needs. For example,   
-# test users can choose to log only high-level events or capture   
-# detailed information about each task's execution.
+# To provide visibility into the system's behavior,   
+# users can choose to log high-level events.
 
 verbose: bool = False # Look for these
 convergence_verbose: bool = False
 ```
-> Logs show various stages of task routing, execution, and completion,   
-> making it easy to trace the lifecycle of each task and understand   
-> system behavior under different workloads. The standard logging system  
-> provides detailed insights into task flow, while the convergence detector  
-> offers real-time monitoring of workload patterns, enabling proactive   
-> management and inspection.
 
 **Shutdown & Print Visibility:**
 ```terminaloutput
@@ -879,8 +878,9 @@ Operations shutdown complete!
 ```
 </details>
 
+[↑ Top](#scope)
 
-
+---
 # Conclusion
 
 ---
@@ -895,18 +895,14 @@ What was excluded — All GUI, launcher/web flow, and Guard House
 patterns were excluded from this proof to focus on the core TokenGate  
 architecture.
 
----
-Next steps — In the future I will extend this document to cover Guard  
-House behavior, launcher/web flow, and token interception patterns,  
-with the goal of presenting the broader architecture in a more  
-complete form. For the complete architecture including WebSocket  
+---  
+
+For the complete architecture including WebSocket  
 orchestration and recovery mechanisms, see [proof-of-concept.md](proof-of-concept.md).  
+  
 
-The goal will be to demonstrate how the full architecture works   
-together, and to provide a more comprehensive understanding of the   
-system's capabilities and design principles.  
+## Limits of Claims  
 
-## Limits of Claims
 This proof of concept does not establish a new concurrency primitive in   
 Python, nor does it claim replacement of native threading or asyncio   
 semantics. It demonstrates a task model in which tokens are used to bind   

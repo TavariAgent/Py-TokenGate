@@ -1,6 +1,6 @@
 # Proof of Concept: TokenGate
 
-**This is a proof of async coordination and thread backed execution working  
+**This documents use of async coordination and thread backed execution working  
 using task tokens.**  
 
 ***This is a proof of concept not a finished product.***
@@ -9,12 +9,11 @@ using task tokens.**
 
 ### Overview of Documented Proofs: 
 
-1. Productivity and methodology with results
-2. Task acceptance criteria and setup for usage
-3. Event bus correctness and concurrency
-4. WebSocket interface for task orchestration
-5. Product safety and failure/recovery mechanisms  
-
+1. Productivity and methodology with results 
+2. [Task Acceptance Criteria](#2-task-acceptance-criteria)
+3. [Event Bus Correctness and Concurrency](#3-event-bus-correctness-and-concurrency-)
+4. [WebSocket Interface](#4-orchestration-of-tasks-through-websocket)
+5. [Product Safety](#5-product-recovery-mechanisms)
 
 ---
 
@@ -33,12 +32,6 @@ Token tasks are the paradigm that connects async and threading.
 ### Objective:
 
 To show the productivity of TokenGate by simulating various workloads.
-
-### Setup:
-
-1. **Task Simulation:** Prints of tasks that simulate standalone, nested, and mixed workloads.  
-2. **Usage Scenarios:** Demonstrates how the token-based system can be implemented.
-3. **Performance Metrics:** Examples show measured results for parallelism, latency, and throughput.
 
 ---
 
@@ -212,6 +205,8 @@ MIXED ORCHESTRATOR COMPLETE
     heavy_operation                       284  ████████████████████████████████████████████████████████
   
 ```
+
+[↑ Top](#proof-of-concept-tokengate)
 
 ---
 
@@ -422,9 +417,11 @@ def write_blob_moderate(path, size_kb):
     }
 ```
 
+[↑ Top](#proof-of-concept-tokengate)
+
 ---
 
-## 3. Event Bus Correctness and Concurrency   
+## 3. Event Bus Correctness And Concurrency   
 
 
 
@@ -752,6 +749,7 @@ def can_use_core(self, weight: TaskWeight, core_id: int) -> bool:
 > they are distributed under load. The routing mechanisms are core identity routing, chain  
 > position routing, and load-based.
 
+[↑ Top](#proof-of-concept-tokengate)
 
 ---
 ## 4. Orchestration of Tasks Through WebSocket
@@ -786,8 +784,6 @@ honest, consistent results across all monitoring layers.
 
 > #### The dashboard connects via WebSocket and reflects live system state.
 
-![TokenGate Dashboard — live run](/assets/dash_working.png)
-
 ```
 [GUI] Client connected: CKoqNEt8Y-HURE5MAAAB
 ```
@@ -805,42 +801,11 @@ All panels update in real time via WebSocket push without polling.
 
 ### Interface:
 
-> #### Token Pool and Guard House report independently — neither derives its numbers from the other.
+> #### Token Pool and Guard House report independently.
 
-After a sustained mixed workload followed by a pool drain, the two panels reported:
-```
-Token Pool
-──────────────────────
-  Total Created  : 12,650
-  Waiting        : 0
-  Executing      : 0
-  Completed      : 3,489
-  Failed         : 0
 
-Guard House Status
-──────────────────────
-  Methods Tracked : 4
-  Executions      : 10,060
-  Excellent       : 4
-  Healthy         : 0
-  At Risk         : 0
-  Problem         : 0
-```
+![TokenGate Dashboard — live run](/assets/dash_working.png)
 
-These three numbers measure three different layers of the architecture:
-
-- **12,650** — top-level tokens admitted to the pool this session
-- **10,060** — individual method executions tracked by Guard House (sub-token depth)
-- **3,489** — full chains resolved before the drain fired
-
-`10,060 ÷ 3,489 ≈ 2.88` sub-executions per resolved chain, consistent with the
-mixed workload composition. The gap between 12,650 and 3,489 represents tokens
-that were loaded but drained before their chains completed — not failures.
-Zero tokens were erroneously marked failed as a result of the drain.
-
-> Three independent systems measuring three different things, all internally
-> consistent. The numbers cannot be collectively fabricated without corrupting
-> all three in the exact right ratio.
 
 ---
 
@@ -909,7 +874,14 @@ operation types, with affinity routing verified per-record:
 Complexity scores consistent per operation type across all 250 records —
 `code_inspector.py` caching confirmed working correctly.
 
-A full execution history dump is available in `dumps/` for independent verification.
+A full execution history dump is available in `dumps/` for independent verification.  
+
+Integration notes on how to set up use of WebSocket will be released separately to avoid   
+coupling the core proof of concept with the dashboard implementation. The WebSocket server   
+is designed to be modular and can be integrated or removed without affecting the core   
+TokenGate functionality.
+
+[↑ Top](#proof-of-concept-tokengate)
 
 ---
 
@@ -1100,6 +1072,8 @@ def _inject_retry_to_pool(self, retry_token: TaskToken):
     print(f"[GUARD] Injected retry token {retry_token.token_id} directly to pool")
 ```
 
+[↑ Top](#proof-of-concept-tokengate)
+
 ---
 
 # Conclusion
@@ -1119,7 +1093,7 @@ while maintaining correctness and stability.
 
 #### What's Next?
 
-- Finish WebSocket implementation and testing.
+- Further WebSocket integrations.
 - Tighten integration between components.
 - Explore more advanced recovery mechanisms and failure modes.
 - Continue optimizing for performance and scalability.
