@@ -9,11 +9,13 @@ using task tokens.**
 
 ### Overview of Documented Proofs: 
 
-1. Productivity and methodology with results 
+1. Productivity and methodology with results
 2. [Task Acceptance Criteria](#2-task-acceptance-criteria)
 3. [Event Bus Correctness and Concurrency](#3-event-bus-correctness-and-concurrency)
 4. [WebSocket Interface](#4-orchestration-of-tasks-through-websocket)
 5. [Product Safety](#5-product-recovery-mechanisms)
+
+- [Conclusion](#conclusion)
 
 ---
 
