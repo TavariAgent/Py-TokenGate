@@ -4,7 +4,7 @@
 
 #### Quick Links
 
-- [Proof 1: CPU-Based Operation Scheduling](#proof-1-cpu-based-operation-scheduling-)
+- [Proof 1: CPU-Based Operation Scheduling](#proof-1-cpu-based-operation-scheduling)
 - [Proof 2: I/O-Based Workloads](#proof-2-io-based-workloads)
 - [Proof 3: Mixed Workload Coordination](#proof-3-mixed-workload-coordination)
 - [Proof 4: Observability and Control](#proof-4-observability-and-control)
@@ -25,7 +25,7 @@ together, and that execution remains observable.
 
 ---
 
-## Proof 1: CPU-Based Operation Scheduling 
+## Proof 1: CPU-Based Operation Scheduling
 
 
 <details>
