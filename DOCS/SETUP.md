@@ -28,7 +28,7 @@ class OperationsCoordinator: # Under this class are where you find configuration
             base_memory_budget_mb: int = 45, # This is a control for operation memory (adjustable).
             num_executors: int = 8, # This controls number of parallel executors.
             auto_block_dangerous: bool = False, # Blocks explosive tasks with possibly dangerous inputs.
-    ): 
+    ):
 ```
 
 6.  *Even when using the runner ensure you can handle the concurrent writes, tests are currently limited to 25*.

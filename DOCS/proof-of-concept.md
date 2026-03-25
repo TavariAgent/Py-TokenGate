@@ -641,6 +641,17 @@ async def _execute_token(self, token: TaskToken, worker_id: str, core_id: int):
         token.set_result(result)
         self.total_executed += 1
         success = True
+
+        print(f"[{worker_id.upper()}] ✓ Completed {token.token_id}")
+
+    except Exception as e:
+        # Failed!
+        token.set_error(e)
+        self.total_failed += 1
+
+        print(f"[{worker_id.upper()}] ✗ Failed {token.token_id}: {e}")
+    finally:
+        execution_duration = time.time() - start_time
 ```
 
 ### Mailboxes:
@@ -878,10 +889,9 @@ Complexity scores consistent per operation type across all 250 records —
 
 A full execution history dump is available in `dumps/` for independent verification.  
 
-Integration notes on how to set up use of WebSocket will be released separately to avoid   
-coupling the core proof of concept with the dashboard implementation. The WebSocket server   
-is designed to be modular and can be integrated or removed without affecting the core   
-TokenGate functionality.
+To learn how to use online control features, see the WebSocket Integration Guide:
+
+[WebSocket Integration Guide](WEBSOCKET.md)
 
 [↑ Top](#proof-of-concept-tokengate)
 

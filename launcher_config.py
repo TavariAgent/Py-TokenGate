@@ -25,6 +25,24 @@ REGISTERED_TASKS = {
         "enabled": True,
     },
 
+    "math_operations": {
+        "module": "demo.math_operations",
+        "function": "main",
+        "description": "Mathematical operations",
+        "category": "Demo",
+        "icon": "➗",
+        "enabled": True,
+    },
+
+    "demo_client": {
+        "module": "demo.demo_client_gui",
+        "function": "main",
+        "description": "Demo client",
+        "category": "Demo",
+        "icon": "👩‍💻",
+        "enabled": True,
+    }
+
     # Add your custom tasks here!
     # 'my_task': {
     #     'module': 'my_module',
