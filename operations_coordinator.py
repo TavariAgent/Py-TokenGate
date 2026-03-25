@@ -148,7 +148,7 @@ class OperationsCoordinator:
         # Metrics
         self.metrics = get_metrics()
 
-        self.recent_executions = deque(maxlen=250) # ← Tune for micro performance gains
+        self.recent_executions = deque(maxlen=95) # ← Tune for micro performance gains
         self._executions_lock = threading.RLock()  # ← RLock for safety!
 
         print("Overflow guard initialized")
@@ -466,6 +466,18 @@ class OperationsCoordinator:
     def drain_pool(self) -> int:
         """Kill all tokens still waiting for admission and return the count."""
         return global_token_pool.drain()
+
+    def drain_operation(self, operation_type: str, reason: str = "admin_per-token_drain") -> int:
+        """Drain a specific token"""
+        return global_token_pool.drain(operation_type, reason)
+
+    def pause_operation(self, operation_type: str, reason: str = "admin_per-token_pause") -> int:
+        """Pause a specific token"""
+        return global_token_pool.pause(operation_type, reason)
+
+    def resume_operation(self, operation_type: str, reason: str = "admin_per-token_resume") -> int:
+        """Resume a specific token"""
+        return global_token_pool.resume(operation_type, reason)
 
 
 # ============================================================================

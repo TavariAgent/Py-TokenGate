@@ -360,6 +360,48 @@ def admin_kill_token():
     return jsonify({'error': 'No coordinator'}), 503
 
 
+@app.route('/api/admin/pause_operation', methods=['POST'])
+@login_required
+def admin_pause_operation():
+    """Pause admission for a specific operation type."""
+    data = request.json
+    op_type = data.get('operation_type')
+
+    if coordinator:
+        # NOTE: You will need to implement pause_operation in your OperationsCoordinator
+        success = coordinator.pause_operation(op_type)
+        return jsonify({'success': success, 'operation_type': op_type})
+    return jsonify({'error': 'No coordinator'}), 503
+
+
+@app.route('/api/admin/resume_operation', methods=['POST'])
+@login_required
+def admin_resume_operation():
+    """Resume admission for a specific operation type."""
+    data = request.json
+    op_type = data.get('operation_type')
+
+    if coordinator:
+        # NOTE: You will need to implement resume_operation in your OperationsCoordinator
+        success = coordinator.resume_operation(op_type)
+        return jsonify({'success': success, 'operation_type': op_type})
+    return jsonify({'error': 'No coordinator'}), 503
+
+
+@app.route('/api/admin/drain_operation', methods=['POST'])
+@login_required
+def admin_drain_operation():
+    """Drain all waiting tokens for a specific operation type."""
+    data = request.json
+    op_type = data.get('operation_type')
+
+    if coordinator:
+        # NOTE: You will need to implement drain_operation in your OperationsCoordinator
+        count = coordinator.drain_operation(op_type)
+        return jsonify({'drained': count, 'operation_type': op_type})
+    return jsonify({'error': 'No coordinator'}), 503
+
+
 @app.route('/api/admin/kill_operation', methods=['POST'])
 @login_required
 def admin_kill_operation():

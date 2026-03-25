@@ -198,13 +198,30 @@
                     <button class="btn btn-success" onclick="resumeAdmission()">Resume Admission</button>
                 </div>
 
-                <!-- SECTION 2 -->
+                <!-- SECTION 2: Operation Type Controls -->
                 <div class="control-section">
-                    <h3>Kill Operations</h3>
+                    <h3>Operation Type Controls</h3>
+                    <p style="font-size: 0.8em; color: #888;">Target a specific function (e.g., cpu_heavy) to isolate abuse.</p>
                     <div class="form-group">
                         <label>Operation Type</label>
-                        <input type="text" id="kill-operation-input" placeholder="e.g., json_generation">
-                        <button class="btn btn-danger" onclick="killOperation()">Kill All of Type</button>
+                        <input type="text" id="target-operation-input" placeholder="e.g., cpu_heavy">
+
+                        <div style="display: flex; gap: 5px; margin-top: 10px; flex-wrap: wrap;">
+                            <button class="btn btn-warning" onclick="controlOperation('pause')">Pause</button>
+                            <button class="btn btn-success" onclick="controlOperation('resume')">Resume</button>
+                            <button class="btn btn-danger-alt" onclick="controlOperation('drain')">Drain</button>
+                            <button class="btn btn-danger" onclick="controlOperation('kill_all')">Kill All</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 2.5: Specific Token Control -->
+                <div class="control-section">
+                    <h3>Specific Token Control</h3>
+                    <div class="form-group">
+                        <label>Target Token ID</label>
+                        <input type="text" id="target-token-input" placeholder="e.g., tkn_123abc">
+                        <button class="btn btn-danger" style="margin-top: 5px;" onclick="killSpecificToken()">Kill Specific Token</button>
                     </div>
                 </div>
 
@@ -244,6 +261,46 @@
             })
             .catch(error => {
                 alert(`❌ Network error: ${error.message}`);
+            });
+        }
+                // Handle Individual Token Kill
+        function killSpecificToken() {
+            const tokenId = document.getElementById('target-token-input').value.trim();
+            if (!tokenId) { alert("Please enter a Token ID"); return; }
+
+            fetch('/api/admin/kill_token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token_id: tokenId })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) alert(`✅ Token ${tokenId} killed successfully.`);
+                else alert(`❌ Error: ${data.error || 'Token not found'}`);
+            });
+        }
+
+        // Handle Operation Type Controls (Pause, Resume, Drain, Kill)
+        function controlOperation(action) {
+            const opType = document.getElementById('target-operation-input').value.trim();
+            if (!opType) { alert("Please enter an Operation Type"); return; }
+
+            // Map the UI action to the specific backend endpoint
+            let endpoint = '';
+            if (action === 'kill_all') endpoint = '/api/admin/kill_operation';
+            else if (action === 'pause') endpoint = '/api/admin/pause_operation';
+            else if (action === 'resume') endpoint = '/api/admin/resume_operation';
+            else if (action === 'drain') endpoint = '/api/admin/drain_operation';
+
+            fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ operation_type: opType })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) alert(`❌ Error: ${data.error}`);
+                else alert(`✅ Operation action '${action}' applied to ${opType}.`);
             });
         }
     </script>

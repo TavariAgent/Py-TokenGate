@@ -95,9 +95,9 @@ progress and manage it through the "Controls".
 
 The WebSocket interface allows you to control the execution of tasks dynamically. From the   
 dashboard, you can monitor execution times, view core affinity, and initiate administrative  
-controls (Pause, Drain, Kill) on active task pools.
+controls (Pause, Drain, Kill) on active task pools as well as per-task controls.
 
-![Admin Dashboard](/assets/admin_panel.png)  
+![Admin Dashboard](/assets/per_operation_controls.png)  
 
 > **Note:** Every administrative action triggers a real-time notification in the GUI to   
 > confirm success or failure when managing live tokens.

@@ -242,7 +242,7 @@ class TokenPool:
         self.tokens: Dict[str, TaskToken] = {}
         self._lock = threading.Lock()
 
-        self._token_queue = None
+        self._token_queue: Optional[asyncio.Queue['TaskToken']] = None
         self._event_loop: Optional[asyncio.AbstractEventLoop] = None
         self.default_on_state_change = None
 
@@ -254,6 +254,10 @@ class TokenPool:
         # Admin controls
         self._paused = threading.Event()
         self._paused.set()  # Start unpaused
+
+        # --- NEW PER-OPERATION STATE ---
+        self._paused_operations: set[str] = set()
+        self._paused_holding: Dict[str, list[TaskToken]] = {}
 
     def create_token(
             self,
@@ -297,18 +301,37 @@ class TokenPool:
 
         return token
 
-    async def get_next_token(self) -> TaskToken:
+    async def get_next_token(self):
         """Wait for and return the next token eligible for admission.
 
-        If the pool is paused, this method waits until admission is resumed.
-        Tokens are returned in FIFO order from the async token queue.
+        If the pool is globally paused, this waits. If a specific token's
+        operation_type is paused, it routes it to a holding area and grabs the next.
         """
-        # Wait if paused
-        while not self._paused.is_set():
-            await asyncio.sleep(0.1)
+        while True:
+            # Wait if globally paused
+            while not self._paused.is_set():
+                await asyncio.sleep(0.1)
 
-        # FIFO
-        return await self._token_queue.get()
+            # FIFO
+            token = await self._token_queue.get()
+
+            # 1. Skip if it was drained/killed while waiting in the queue
+            if token.is_killed() or token.state == TokenState.KILLED:
+                continue
+
+            # 2. Check if this specific operation is paused
+            with self._lock:
+                is_op_paused = token.metadata.operation_type in self._paused_operations
+
+            if is_op_paused:
+                # Route to holding area and loop to get the next token
+                with self._lock:
+                    if token.metadata.operation_type not in self._paused_holding:
+                        self._paused_holding[token.metadata.operation_type] = []
+                    self._paused_holding[token.metadata.operation_type].append(token)
+                continue
+
+            return token
 
     def get_all_tokens(self) -> Dict[str, TaskToken]:
         """Return a shallow snapshot of all registered tokens."""
@@ -349,25 +372,51 @@ class TokenPool:
         print(f"[POOL] Killed {killed} tokens of type {operation_type}")
         return killed
 
-    def pause(self):
-        """Pause token admission while continuing to accept new tokens."""
-        self._paused.clear()
-        print("[POOL] PAUSED - tokens will accumulate")
+    def pause(self, operation_type: str = None, reason: str = "admin_pause"):
+        """Pause token admission globally or for a specific operation type."""
+        if operation_type:
+            with self._lock:
+                self._paused_operations.add(operation_type)
+            print(f"[POOL] PAUSED operation: {operation_type} ({reason})")
+        else:
+            self._paused.clear()
+            print(f"[POOL] PAUSED globally ({reason}) - tokens will accumulate")
 
-    def resume(self):
-        """Resume token admission from the async queue."""
-        self._paused.set()
-        print("[POOL] RESUMED - tokens will admit")
+    def resume(self, operation_type: str = None, reason: str = "admin_resume"):
+        """Resume token admission globally or for a specific operation type."""
+        if operation_type:
+            tokens_to_requeue = []
+            with self._lock:
+                self._paused_operations.discard(operation_type)
+                # Retrieve held tokens
+                if operation_type in self._paused_holding:
+                    tokens_to_requeue = self._paused_holding.pop(operation_type)
 
-    def drain(self) -> int:
-        """Kill all tokens currently waiting for admission and return the count."""
+            # Re-insert held tokens back into the async admission queue
+            if self._event_loop and tokens_to_requeue:
+                for token in tokens_to_requeue:
+                    asyncio.run_coroutine_threadsafe(
+                        self._token_queue.put(token),
+                        self._event_loop
+                    )
+            print(
+                f"[POOL] RESUMED operation: {operation_type} ({reason}) - requeued {len(tokens_to_requeue)} held tokens")
+        else:
+            self._paused.set()
+            print(f"[POOL] RESUMED globally ({reason}) - tokens will admit")
+
+    def drain(self, operation_type: str = None, reason: str = "admin_drain") -> int:
+        """Kill waiting tokens, either globally or matching a specific operation type."""
         waiting = self.get_tokens_by_state(TokenState.WAITING)
-        for token in waiting:
-            token.kill("drain_operation")
+        killed = 0
 
-        killed = len(waiting)
+        for token in waiting:
+            if operation_type is None or token.metadata.operation_type == operation_type:
+                if token.kill(reason):
+                    killed += 1
+
         self.total_killed += killed
-        print(f"[POOL] DRAINED - killed {killed} waiting tokens")
+        print(f"[POOL] DRAINED - killed {killed} waiting tokens (op_type={operation_type})")
         return killed
 
     def get_stats(self) -> dict:
