@@ -95,6 +95,7 @@ class TaskToken(Generic[T]):
             kwargs: dict,
             metadata: TokenMetadata
     ):
+        self.state: TokenState = TokenState.CREATED
         self.token_id = token_id
         self.func = func
         self.args = args
@@ -103,7 +104,6 @@ class TaskToken(Generic[T]):
 
         # State management
         self.on_state_change = None
-        self.state = TokenState.CREATED
         self._state_lock = threading.Lock()
 
         # Result delivery
@@ -114,6 +114,13 @@ class TaskToken(Generic[T]):
         # Admin control
         self._kill_requested = threading.Event()
         self._killed_reason: Optional[str] = None
+
+    def __await__(self):
+        """
+        Makes this Token awaitable in asyncio loops.
+        It wraps the underlying thread-safe concurrent.futures.Future.
+        """
+        return asyncio.wrap_future(self._result_future).__await__()
 
     def transition_state(self, new_state: TokenState) -> bool:
         """Attempt a validated lifecycle transition.
@@ -238,6 +245,7 @@ class TokenPool:
     a coordinator retrieves and admits the token.
     """
     def __init__(self):
+        self.state: TokenState = TokenState.CREATED
         self.quarantine_mgr = None
         self.tokens: Dict[str, TaskToken] = {}
         self._lock = threading.Lock()
@@ -450,7 +458,7 @@ class TokenPool:
 def task_token_guard(
     operation_type: str,
     tags: Optional[Dict[str, Any]] = None,
-) -> Callable[[Callable[[P], R]], Callable[[P], "TaskToken[R]"]]:
+) -> Callable[[Callable[P, R]], Callable[P, "TaskToken[R]"]]:
     """Decorate a callable so calls return TaskToken instead of executing immediately.
 
     The wrapper performs optional code analysis, optional quarantine checks,
@@ -468,9 +476,9 @@ def task_token_guard(
         The wrapped callable is not executed at call time. It is captured as a
         token-managed task for later admission and execution.
     """
-    def decorator(func: Callable[[P], R]) -> Callable[[P], R]:
+    def decorator(func: Callable[P, R]) -> Callable[P, "TaskToken[R]"]:
         @wraps(func)
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> "TaskToken[R]":
             from .code_inspector import CodeInspector
             from .spike_detector import TokenQuarantinedException
 
