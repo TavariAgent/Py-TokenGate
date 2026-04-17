@@ -90,7 +90,7 @@ class OperationsCoordinator:
     """
     def __init__(
             self,
-            workers_per_core: int = 4,
+            workers_per_core: int = 4, # <- !!! THIS IS NOT ADJUSTABLE !!! (You can either disable convergence or leave that alone!)
             enable_convergence: bool = True,
             convergence_verbose: bool = False, # <- !!! THIS IS NOT COMPATIBLE WITH REPL !!!
             base_memory_budget_mb: int = 65,
