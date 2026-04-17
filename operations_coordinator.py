@@ -40,13 +40,13 @@ class ExecutionRecord:
     JSON history export.
     """
     token_id: str
-    operation_type: str
     method_name: str
     success: bool
     execution_time: float
     timestamp: float
     core_id: int
     worker_id: str
+    operation_type: Optional[str] = None
     complexity_score: Optional[float] = None
 
     def to_dict(self) -> dict:
@@ -488,7 +488,7 @@ _global_coordinator: Optional[OperationsCoordinator] = None
 _coordinator_lock = threading.Lock()
 
 
-def get_global_coordinator() -> OperationsCoordinator:
+def get_global_coordinator() -> OperationsCoordinator | None:
     """Return the process-global coordinator, creating and starting it if needed.
 
     This function exists primarily to support decorator-driven submission paths
