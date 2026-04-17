@@ -11,8 +11,7 @@ adaptation based on directly observed system behavior.
 """
 
 import threading
-import time
-from typing import Dict, Optional
+from typing import Optional
 
 from prometheus_client import Counter, Gauge, Histogram, CollectorRegistry
 
@@ -162,19 +161,6 @@ class ThreadingMetrics:
             to_pattern=str(to_pattern)
         ).inc()
 
-    def get_metric_snapshot(self, core_id: Optional[int] = None) -> Dict:
-        """Return a lightweight internal metrics snapshot.
-
-        This currently returns a timestamped placeholder structure for
-        convergence integration. Detailed histogram analysis is expected
-        to come from Prometheus queries or a later snapshot implementation.
-        """
-        snapshot = {
-            'timestamp': time.time(),
-            'cores': {}
-        }
-        return snapshot
-
     def get_registry(self) -> CollectorRegistry:
         """Return the Prometheus registry used by this metrics instance."""
         return self.registry
@@ -185,7 +171,7 @@ _global_metrics: Optional[ThreadingMetrics] = None
 _global_lock = threading.Lock()
 
 
-def get_metrics() -> ThreadingMetrics:
+def get_metrics() -> ThreadingMetrics | None:
     """Return the process-global metrics instance, creating it if needed."""
     global _global_metrics
 

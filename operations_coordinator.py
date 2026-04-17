@@ -92,9 +92,9 @@ class OperationsCoordinator:
             self,
             workers_per_core: int = 4,
             enable_convergence: bool = True,
-            convergence_verbose: bool = False,
+            convergence_verbose: bool = False, # <- !!! THIS IS NOT COMPATIBLE WITH REPL !!!
             base_memory_budget_mb: int = 65,
-            num_executors: int = 6,
+            num_executors: int = 4,
             auto_block_dangerous: bool = False,
     ):
         """Initialize the coordinator and construct all runtime components.

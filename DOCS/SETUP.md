@@ -24,7 +24,7 @@ class OperationsCoordinator: # Under this class are where you find configuration
             self, 
             workers_per_core: int = 4, # Controls number of workers and may notgo under 2 workers.
             enable_convergence: bool = True, # Controls dynamic worker counts.
-            convergence_verbose: bool = False,
+            convergence_verbose: bool = False, # DO NOT ENABLE INSIDE A REPL!!!
             base_memory_budget_mb: int = 45, # This is a control for operation memory (adjustable).
             num_executors: int = 8, # This controls number of parallel executors.
             auto_block_dangerous: bool = False, # Blocks explosive tasks with possibly dangerous inputs.

@@ -22,11 +22,6 @@ from typing import Dict, Optional, Callable, Any
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, current_dir)
 
-# Also check parent directory for project files (handles subdirectory structures)
-parent_dir = os.path.dirname(current_dir)
-if os.path.exists(os.path.join(parent_dir, 'token_system.py')):
-    sys.path.insert(0, parent_dir)
-
 from .token_system import global_token_pool, TaskToken, TokenMetadata, TokenState
 from .code_inspector import CodeInspector, ComplexityLevel
 from .allocation_optimizer import AllocationOptimizer
@@ -218,7 +213,7 @@ class OverflowGuard:
         # First failure - can create backup
         return True
 
-    def create_retry_token(self, original_token: TaskToken, execution_duration: float) -> Optional[TaskToken]:
+    def create_retry_token(self, original_token: TaskToken, execution_duration: float) -> Optional[TaskToken] | None:
         """Create a retry token with bumped allocation under the active retry policy."""
         with self._backup_lock:
             token_id = original_token.token_id
@@ -388,91 +383,3 @@ class OverflowGuard:
                 print()
 
             print("=" * 70)
-
-
-# ============================================================================
-# TESTING
-# ============================================================================
-
-if __name__ == '__main__':
-    print("=" * 70)
-    print("OVERFLOW GUARD WITH RETRY SYSTEM TEST")
-    print("=" * 70)
-    print()
-
-    # Create guard
-    guard = OverflowGuard(base_budget_mb=50)
-
-    # Simulate token inspection
-    from .token_system import task_token_guard
-
-
-    @task_token_guard(operation_type='test_operation', tags={'weight': 'moderate'})
-    def test_function(x, y):
-        """Test function for inspection."""
-        result = []
-        for i in range(x):
-            result.append(i * y)
-        return result
-
-
-    print("-" * 70)
-    print("TEST: Token Inspection")
-    print("-" * 70)
-
-    # Create token (this would normally happen via decorator)
-    # The decorator returns a TaskToken, not the function result
-    token: TaskToken = test_function(100, 5)  # type: ignore[assignment]
-
-    # Inspect it
-    inspection = guard.inspect_token(token)
-    print()
-
-    # Simulate failure and retry
-    print("-" * 70)
-    print("TEST: Retry Logic")
-    print("-" * 70)
-    print()
-
-    # Simulate first failure (15 seconds = in retry zone)
-    print("Simulating first failure (15s execution)...")
-    should_retry = guard.should_retry(token.token_id, 15.0, success=False, operation_type='test_operation')
-    print(f"Should retry: {should_retry}")
-    print()
-
-    if should_retry:
-        retry_token = guard.create_retry_token(token, 15.0)
-        print(f"Created retry token: {retry_token.token_id if retry_token else None}")
-        print()
-
-    # Simulate second failure
-    print("Simulating second failure (20s execution)...")
-    should_retry = guard.should_retry(token.token_id, 20.0, success=False, operation_type='test_operation')
-    print(f"Should retry: {should_retry}")
-    print()
-
-    if should_retry:
-        retry_token = guard.create_retry_token(token, 20.0)
-        print(f"Created retry token: {retry_token.token_id if retry_token else None}")
-        print()
-
-    # Test FINALE exclusion
-    print("Testing FINALE exclusion...")
-    should_retry_finale = guard.should_retry('finale_task_123', 15.0, success=False,
-                                             operation_type='infinite_loop_FINALE')
-    print(f"Should retry FINALE task: {should_retry_finale}")
-    print()
-
-    # Show backup status
-    guard.print_backup_status()
-
-    # Show stats
-    print()
-    print("Final Stats:")
-    stats = guard.get_stats()
-    print(f"  Inspections: {stats['total_inspections']}")
-    print(f"  Retries created: {stats['total_retries_created']}")
-    print(f"  Active backups: {stats['active_backups']}")
-
-    print()
-    print("Test complete!")

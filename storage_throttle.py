@@ -101,9 +101,9 @@ class StorageThrottle:
             self.total_operations += 1
 
         # Wait for I/O slot
-        wait_start = time.time()
+        wait_start = time.perf_counter()
         acquired = self._semaphore.acquire(blocking=True)
-        wait_duration = time.time() - wait_start
+        wait_duration = time.perf_counter() - wait_start
 
         if not acquired:
             raise Exception(f"Failed to acquire I/O slot for {self.speed_tier}")
@@ -264,7 +264,7 @@ _global_storage_throttle: Optional[StorageThrottleManager] = None
 _storage_lock = threading.Lock()
 
 
-def get_storage_throttle() -> StorageThrottleManager:
+def get_storage_throttle() -> StorageThrottleManager | None:
     """
     Get the global storage throttle manager.
 
@@ -294,88 +294,3 @@ def configure_storage_throttle(custom_speeds: Optional[Dict[str, int]] = None):
         _global_storage_throttle = StorageThrottleManager(custom_speeds)
 
     return _global_storage_throttle
-
-
-# ============================================================================
-# TESTING
-# ============================================================================
-
-if __name__ == '__main__':
-    import json
-    from pathlib import Path
-    import concurrent.futures
-
-    print("=" * 70)
-    print("STORAGE THROTTLE MANAGER TEST")
-    print("=" * 70)
-    print()
-
-    # Initialize throttle
-    throttle = get_storage_throttle()
-
-    # Create a test directory
-    test_dir = Path('/tmp/storage_test')
-    test_dir.mkdir(exist_ok=True)
-
-    print("Writing files with different speed tiers...")
-    print()
-
-
-    # Test function
-    def write_test_file(index: int, speed_tier: str):
-        """Test file write with specific speed tier."""
-        data = {'index': index, 'tier': speed_tier, 'data': list(range(100))}
-        filename = test_dir / f'{speed_tier.lower()}_{index:03d}.json'
-
-        # Throttled write
-        def _write():
-            with open(filename, 'w') as f:
-                json.dump(data, f, indent=2)
-            return filename
-
-        result = throttle.throttle(speed_tier, _write)
-        return result
-
-
-    # Execute writes across different tiers
-    print("Testing all speed tiers concurrently:")
-    print("  SLOW: 20 files (10 concurrent max)")
-    print("  MODERATE: 30 files (25 concurrent max)")
-    print("  FAST: 40 files (50 concurrent max)")
-    print()
-
-    start = time.time()
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
-        futures = []
-
-        # SLOW tier
-        for i in range(20):
-            futures.append(executor.submit(write_test_file, i, 'SLOW'))
-
-        # MODERATE tier
-        for i in range(30):
-            futures.append(executor.submit(write_test_file, i, 'MODERATE'))
-
-        # FAST tier
-        for i in range(40):
-            futures.append(executor.submit(write_test_file, i, 'FAST'))
-
-        # Wait for completion
-        results = [f.result() for f in concurrent.futures.as_completed(futures)]
-
-    duration = time.time() - start
-
-    print()
-    print("=" * 70)
-    print("Results:")
-    print("=" * 70)
-    print(f"Total files written: {len(results)}")
-    print(f"Total time: {duration:.2f}s")
-    print()
-
-    # Show stats
-    throttle.print_stats()
-
-    print()
-    print(f"✅ Test complete! Files in: {test_dir}")

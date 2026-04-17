@@ -167,8 +167,7 @@ class PrometheusConvergenceEngine:
             worker_pool
     ) -> tuple[str, WorkerPattern]:
         """Classify core pressure and return the recommended worker pattern."""
-        # Get worker count for this core
-        workers_per_core = 4  # Default, could query from worker_pool
+        workers_per_core = worker_pool.workers_per_core if worker_pool else 4
 
         # Convert None to 0 for comparisons
         queue_depth = queue_depth or 0
@@ -294,9 +293,8 @@ class PrometheusConvergenceEngine:
         }
 
     # Utility methods for parsing Prometheus data
-
+    @staticmethod
     def _extract_gauge(
-            self,
             prom_data: str,
             metric_name: str,
             labels: Dict[str, str]
@@ -315,8 +313,8 @@ class PrometheusConvergenceEngine:
                         pass
         return None
 
+    @staticmethod
     def _calculate_histogram_percentile(
-            self,
             prom_data: str,
             metric_name: str,
             labels: Dict[str, str],
@@ -365,8 +363,8 @@ class PrometheusConvergenceEngine:
 
         return buckets[-1][0] if buckets else None
 
+    @staticmethod
     def _calculate_histogram_average(
-            self,
             prom_data: str,
             metric_name: str,
             labels: Dict[str, str]

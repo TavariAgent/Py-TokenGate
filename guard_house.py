@@ -34,7 +34,7 @@ class MethodHealth(Enum):
 class MethodReputation:
     """Aggregated execution, timing, and health history for one method."""
     method_name: str
-    operation_type: str
+    operation_type: Optional[str] = None
 
     # Execution counts
     total_attempts: int = 0
@@ -174,9 +174,9 @@ class GuardHouse:
     def record_execution_result(
             self,
             method_name: str,
-            operation_type: str,
             success: bool,
             execution_time: float,
+            operation_type: Optional[str] = None,
             failure_type: Optional[str] = None,
             complexity_score: Optional[float] = None
     ):
@@ -418,62 +418,3 @@ class GuardHouse:
             print()
 
         print("=" * 70)
-
-
-# ============================================================================
-# TESTING
-# ============================================================================
-
-if __name__ == '__main__':
-    print("=" * 70)
-    print("GUARD HOUSE V2 TEST - Passive Intelligence")
-    print("=" * 70)
-    print()
-
-    guard_house = GuardHouse()
-
-    print("Simulating production workload patterns...")
-    print()
-
-    # Excellent performer
-    for i in range(50):
-        guard_house.record_execution_result(
-            'json_generator', 'json_gen',
-            success=True, execution_time=0.5
-        )
-
-    # Healthy method
-    for i in range(40):
-        success = i < 35  # 35/40 = 87.5%
-        guard_house.record_execution_result(
-            'data_transformer', 'transform',
-            success=success, execution_time=1.2,
-            failure_type='error' if not success else None
-        )
-
-    # At-risk method
-    for i in range(30):
-        success = i < 20  # 20/30 = 66.7%
-        guard_house.record_execution_result(
-            'network_fetcher', 'fetch',
-            success=success, execution_time=3.5,
-            failure_type='timeout' if not success else None
-        )
-
-    # Problematic method
-    for i in range(20):
-        success = i < 5  # 5/20 = 25%
-        guard_house.record_execution_result(
-            'slow_processor', 'process',
-            success=success, execution_time=45.0 if success else 60.0,
-            failure_type='timeout' if not success else None
-        )
-
-    # Show the heatmap
-    guard_house.print_heatmap()
-
-    # Show top issues
-    guard_house.print_top_issues(limit=3)
-
-    print()
-    print("✅ Test complete - Guard House provides pure visibility!")

@@ -14,6 +14,7 @@ the coordinator/event-loop layer.
 from __future__ import annotations
 
 import asyncio
+import itertools
 import threading
 import time
 from concurrent.futures import Future
@@ -21,6 +22,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from functools import wraps
 from typing import Callable, Any, Optional, Dict, ParamSpec, Generic, TypeVar
+
+_token_id_counter = itertools.count()
 
 
 class TokenState(Enum):
@@ -47,13 +50,13 @@ class TokenMetadata:
     and lifecycle timestamps populated as the token moves through admission
     and execution.
     """
-    operation_type: str
     created_at: float
     created_by: str = "user"  # Track user
     max_execution_time: float = 300.0  # 5 min default
     tags: Dict[str, Any] = field(default_factory=dict)
 
     # Tracking
+    operation_type: Optional[str] = None
     admitted_at: Optional[float] = None
     started_at: Optional[float] = None
     completed_at: Optional[float] = None
@@ -95,7 +98,6 @@ class TaskToken(Generic[T]):
             kwargs: dict,
             metadata: TokenMetadata
     ):
-        self.state: TokenState = TokenState.CREATED
         self.token_id = token_id
         self.func = func
         self.args = args
@@ -104,6 +106,7 @@ class TaskToken(Generic[T]):
 
         # State management
         self.on_state_change = None
+        self.state = TokenState.CREATED
         self._state_lock = threading.Lock()
 
         # Result delivery
@@ -114,13 +117,6 @@ class TaskToken(Generic[T]):
         # Admin control
         self._kill_requested = threading.Event()
         self._killed_reason: Optional[str] = None
-
-    def __await__(self):
-        """
-        Makes this Token awaitable in asyncio loops.
-        It wraps the underlying thread-safe concurrent.futures.Future.
-        """
-        return asyncio.wrap_future(self._result_future).__await__()
 
     def transition_state(self, new_state: TokenState) -> bool:
         """Attempt a validated lifecycle transition.
@@ -245,7 +241,6 @@ class TokenPool:
     a coordinator retrieves and admits the token.
     """
     def __init__(self):
-        self.state: TokenState = TokenState.CREATED
         self.quarantine_mgr = None
         self.tokens: Dict[str, TaskToken] = {}
         self._lock = threading.Lock()
@@ -272,7 +267,7 @@ class TokenPool:
             func: Callable[[P], R],
             args: tuple[Any, ...],
             kwargs: dict,
-            operation_type: str,
+            operation_type: Optional[str] = None,
             tags: Dict[str, Any] | None = None
     ) -> "TaskToken[R]":
         """Create, register, and enqueue a token for later admission.
@@ -285,7 +280,8 @@ class TokenPool:
             The created TaskToken instance.
         """
         self.total_created += 1
-        token_id = f"{operation_type}_{time.time_ns()}"
+        # Combine timestamp + counter — collision-proof at any call rate
+        token_id = f"{operation_type}_{time.time_ns()}_{next(_token_id_counter)}"
 
         metadata = TokenMetadata(
             operation_type=operation_type,
@@ -309,7 +305,7 @@ class TokenPool:
 
         return token
 
-    async def get_next_token(self):
+    async def get_next_token(self) -> TaskToken[T] | None:
         """Wait for and return the next token eligible for admission.
 
         If the pool is globally paused, this waits. If a specific token's
@@ -456,7 +452,7 @@ class TokenPool:
 # DECORATOR - The user-facing API
 # ============================================================================
 def task_token_guard(
-    operation_type: str,
+    operation_type: Optional[str] = None,
     tags: Optional[Dict[str, Any]] = None,
 ) -> Callable[[Callable[P, R]], Callable[P, "TaskToken[R]"]]:
     """Decorate a callable so calls return TaskToken instead of executing immediately.

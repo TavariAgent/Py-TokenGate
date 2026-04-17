@@ -18,8 +18,6 @@ from enum import Enum
 from queue import Queue
 from typing import List
 
-from .token_system import TaskToken
-
 
 class TaskWeight(Enum):
     """Routing weight classes used by the affinity policy."""
@@ -189,33 +187,6 @@ class CoreAffinityQueue:
         self.total_routed = 0
         self.routing_failures = 0
         self._routing_lock = threading.Lock()
-
-    def classify_token_weight(self, token: TaskToken) -> TaskWeight:
-        """Infer routing weight from token tags or operation type.
-
-        Tag-based weight takes precedence. If no explicit weight tag is present,
-        the operation type is inspected for heavy/light hints. Medium is the
-        fallback class.
-        """
-        # Check tags first
-        if 'weight' in token.metadata.tags:
-            weight_str = token.metadata.tags['weight'].lower()
-            if weight_str == 'heavy':
-                return TaskWeight.HEAVY
-            elif weight_str == 'light':
-                return TaskWeight.LIGHT
-            else:
-                return TaskWeight.MEDIUM
-
-        # Check operation_type suffix
-        op_type = token.metadata.operation_type.lower()
-        if op_type.endswith('_heavy') or 'heavy' in op_type:
-            return TaskWeight.HEAVY
-        elif op_type.endswith('_light') or 'light' in op_type:
-            return TaskWeight.LIGHT
-
-        # Default to medium
-        return TaskWeight.MEDIUM
 
     def get_valid_cores_for_weight(self, weight: TaskWeight) -> List[int]:
         """Return the allowed core chain for the given weight."""

@@ -15,21 +15,11 @@ This keeps mailbox placement aligned with the configured affinity policy.
 """
 
 import asyncio
-import os
-import sys
 import time
+from functools import partial
 from typing import Dict, List, Tuple, Any
 
 from .threading_metrics import get_metrics
-
-# Add project paths for imports
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
-parent_dir = os.path.dirname(current_dir)
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
-
 from .token_system import TaskToken, TokenState
 from .admission_gate import WorkerTaskQueue
 from .core_affinity_queue import TaskWeight
@@ -58,6 +48,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
                 retry, overflow, and Guard House callbacks.
         """
         super().__init__()
+        self.result_verbose = False
         self.coordinator = coordinator
         self.num_cores = num_cores
         self.workers_per_core = workers_per_core
@@ -79,7 +70,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         self.core_busy: Dict[int, int] = {c: 0 for c in range(1, self.num_cores + 1)}
 
         # Capped mailbox length to prevent runaway memory (DOS safety)
-        self.MAILBOX_MAX = 100 # Max tokens per worker mailbox
+        self.MAILBOX_MAX = 75 # Max tokens per worker mailbox
 
         self.core_patterns: Dict[int, int] = {}
         for core_id in range(1, num_cores + 1):
@@ -176,12 +167,9 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         success = False
 
         try:
-            # Execute function
-            result = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: token.func(*token.args, **token.kwargs))
-
-            # Success!
+            loop = asyncio.get_running_loop()
+            bound_func = partial(token.func, *token.args, **token.kwargs)
+            result = await loop.run_in_executor(None, bound_func)
             token.set_result(result)
             self.total_executed += 1
             success = True
@@ -192,8 +180,9 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
             # Failed!
             token.set_error(e)
             self.total_failed += 1
+            if self.result_verbose:
+                print(f"[{worker_id.upper()}] ✗ Failed {token.token_id}: {e}")
 
-            print(f"[{worker_id.upper()}] ✗ Failed {token.token_id}: {e}")
         finally:
             execution_duration = time.time() - start_time
 
@@ -276,13 +265,6 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         """Execute one token while updating worker-state and outcome metrics."""
         op_type = token.metadata.tags.get("operation_type", "unknown")
 
-        # Busy/idle update (pattern aware)
-        active_workers = self.core_patterns.get(core_id, self.workers_per_core)
-        self.core_busy[core_id] = min(active_workers, self.core_busy.get(core_id, 0) + 1)
-        busy = self.core_busy[core_id]
-        idle = max(0, active_workers - busy)
-        self.metrics.update_worker_state(core_id, busy, idle)
-
         t0 = time.perf_counter()
         try:
             await self._execute_token(token, worker_id, core_id)
@@ -291,12 +273,6 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         except Exception:
             self.metrics.record_task_failure(op_type, core_id)
             raise
-        finally:
-            # Decrement busy and update again
-            self.core_busy[core_id] = max(0, self.core_busy.get(core_id, 0) - 1)
-            busy = self.core_busy[core_id]
-            idle = max(0, active_workers - busy)
-            self.metrics.update_worker_state(core_id, busy, idle)
 
     def get_core_for_weight(self, weight: TaskWeight) -> List[int]:
         """Return the eligible core range for a routing weight.
@@ -327,7 +303,8 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
                 # Fallback for single-core
                 return [1]
 
-    def classify_token_weight(self, token: TaskToken) -> TaskWeight:
+    @staticmethod
+    def classify_token_weight(token: TaskToken) -> TaskWeight:
         """Infer routing weight from token tags or operation-type naming.
 
         Explicit weight tags take precedence over operation-type heuristics.
@@ -382,7 +359,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
 
         print(f"[CORE_PINNED] Worker {worker_id} (Core {core_id}): {positions[:5]}... (every {self.total_workers})")
 
-    def assign_position_for_token(self, token: TaskToken, verbose = True) -> int:
+    def assign_position_for_token(self, token: TaskToken) -> int:
         """Assign a staggered global route position for a token.
 
         The assigned position respects token weight, valid-core range, current
@@ -412,7 +389,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         # Increment counter
         self.core_position_counters[chosen_core] += 1
 
-        if verbose:
+        if self.result_verbose:
             print(f"[ROUTING] Token {token.token_id} ({weight.value}) → Pos {position} (Core {chosen_core}, Pattern {active_workers})")
         return position
 

@@ -30,7 +30,7 @@ Integration:
 import json
 import time
 import threading
-from typing import Dict, List, Any, Optional, Callable
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from datetime import datetime
@@ -47,7 +47,6 @@ class QuarantinedToken:
     """
     token_id: str
     method_name: str
-    operation_type: str
 
     # Complexity analysis
     predicted_complexity: float
@@ -63,6 +62,7 @@ class QuarantinedToken:
     # Metadata
     timestamp: float
     quarantine_reason: str
+    operation_type: Optional[str] = None
     admin_reviewed: bool = False
     admin_decision: Optional[str] = None  # 'approved', 'rejected', 'modified'
 
@@ -149,7 +149,7 @@ class SpikeDetector:
         historical_avg = getattr(reputation, 'avg_complexity_score', None)
 
         # No complexity tracking yet (allow execution)
-        if historical_avg is None or historical_avg == 0:
+        if historical_avg is None or historical_avg == 0.0:
             return False, 0.0, "No complexity baseline"
 
         # Calculate deviation
@@ -270,13 +270,13 @@ class QuarantineManager:
             self,
             token_id: str,
             method_name: str,
-            operation_type: str,
             predicted_complexity: float,
             historical_avg_complexity: float,
             deviation_percent: float,
             args: tuple[Any, ...],
             kwargs: dict,
-            reason: str
+            reason: str,
+            operation_type: Optional[str] = None
     ) -> QuarantinedToken:
         """
         Quarantine a token.
@@ -468,7 +468,7 @@ class QuarantineManager:
             # Pending review
             pending = self.get_pending_review()
             if pending:
-                print("⚠️  PENDING REVIEW:")
+                print("PENDING REVIEW:")
                 for token in pending[:10]:  # Show top 10
                     print(f"  ├─ {token.token_id}")
                     print(f"  │  Method: {token.method_name}")
@@ -494,125 +494,3 @@ class QuarantineManager:
                 'pending_review': len(self.get_pending_review()),
                 'quarantine_file': str(self.quarantine_file)
             }
-
-
-# ============================================================================
-# TESTING
-# ============================================================================
-
-if __name__ == '__main__':
-    from .guard_house import GuardHouse
-
-    print("=" * 70)
-    print("SPIKE DETECTOR & QUARANTINE MANAGER TEST")
-    print("=" * 70)
-    print()
-
-    # Create components
-    guard_house = GuardHouse()
-    spike_detector = SpikeDetector(guard_house, spike_threshold=0.5, extreme_threshold=2.0)
-    quarantine_mgr = QuarantineManager(Path("test_quarantine.json"))
-
-    print()
-    print("-" * 70)
-    print("TEST 1: Build Historical Baseline")
-    print("-" * 70)
-    print()
-
-    # Simulate normal executions to build baseline
-    print("Building baseline (10 normal executions)...")
-    for i in range(10):
-        guard_house.record_execution_result(
-            method_name='process_data',
-            operation_type='data_processing',
-            success=True,
-            execution_time=2.0,
-            complexity_score=45.0  # Normal complexity
-        )
-
-    print(f"Baseline established: avg complexity = 45.0")
-    print()
-
-    print("-" * 70)
-    print("TEST 2: Normal Token (No Spike)")
-    print("-" * 70)
-    print()
-
-
-    # Create mock metrics for normal call
-    class MockMetrics:
-        complexity_score = 47.0  # 4.4% increase - normal variation
-
-
-    is_spike, deviation, reason = spike_detector.check_for_spike('process_data', CodeMetrics())
-    print(f"Predicted complexity: 47.0")
-    print(f"Is spike: {is_spike}")
-    print(f"Deviation: {deviation * 100:.1f}%")
-    print(f"Reason: {reason}")
-    print()
-
-    print("-" * 70)
-    print("TEST 3: Moderate Spike (50%+ deviation)")
-    print("-" * 70)
-    print()
-
-
-    class MockMetrics2:
-        complexity_score = 75.0  # 66.7% increase - spike!
-
-
-    should_q, deviation, reason = spike_detector.should_quarantine('process_data', CodeMetrics())
-    print(f"Predicted complexity: 75.0")
-    print(f"Should quarantine: {should_q}")
-    print(f"Deviation: {deviation * 100:.1f}%")
-    print(f"Reason: {reason}")
-
-    if should_q:
-        quarantine_mgr.quarantine_token(
-            token_id='token_moderate_spike',
-            method_name='process_data',
-            operation_type='data_processing',
-            predicted_complexity=75.0,
-            historical_avg_complexity=45.0,
-            deviation_percent=deviation,
-            args=([1, 2, 3, 4, 5], "test_data"),
-            kwargs={'batch_size': 1000},
-            reason=reason
-        )
-    print()
-
-    print("-" * 70)
-    print("TEST 4: EXTREME Spike (200%+ deviation)")
-    print("-" * 70)
-    print()
-
-
-    class MockMetrics3:
-        complexity_score = 150.0  # 233% increase - EXTREME!
-
-
-    should_q, deviation, reason = spike_detector.should_quarantine('process_data', CodeMetrics())
-    print(f"Predicted complexity: 150.0")
-    print(f"Should quarantine: {should_q}")
-    print(f"Deviation: {deviation * 100:.1f}%")
-    print(f"Reason: {reason}")
-
-    if should_q:
-        quarantine_mgr.quarantine_token(
-            token_id='token_extreme_spike',
-            method_name='process_data',
-            operation_type='data_processing',
-            predicted_complexity=150.0,
-            historical_avg_complexity=45.0,
-            deviation_percent=deviation,
-            args=([i for i in range(1000000)],),  # Huge list
-            kwargs={},
-            reason=reason
-        )
-    print()
-
-    # Show quarantine report
-    quarantine_mgr.print_quarantine_report()
-
-    print()
-    print("✅ Test complete - Spike detection and quarantine working!")
