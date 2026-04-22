@@ -55,8 +55,7 @@ def string_operation_task(task_data):
 # 'SLOW' (10 writes), 'MODERATE'(25 writes), 
 # 'FAST' (50 writes), 'INSANE' (70 writes) <- CAUTION
 # CPU and IO combined example:
-@task_token_guard(operation_type='data_processing', 
-                  tags={'weight': 'heavy', 'storage_speed': 'MODERATE'})
+@task_token_guard(operation_type='data_processing', tags={'weight': 'heavy', 'storage_speed': 'MODERATE'})
 def data_processing_task(task_data):
     # Simulate a data processing task
     return result

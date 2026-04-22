@@ -182,7 +182,7 @@ if __name__=="__main__":
  > #### The effectiveness of TokenGate in terms of throughput and latency under various loads.
 
 ```terminaloutput
-MIXED ORCHESTRATOR COMPLETE
+MIXED ORCHESTRATOR COMPLETE (3482 tasks, 40s sustained burst at then end and multiple waves.)
 ======================================================================
   Total wall-clock : 120.8s
   Waves            : 232
@@ -543,18 +543,39 @@ def throttle(self, func: Callable, *args, **kwargs) -> Any:
 
 ```python
 # Decorator, wrapper for token snapshot and creation
-def decorator(func: Callable[[P], R]) -> Callable[[P], R]:
-    @wraps(func)
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-        from .code_inspector import CodeInspector
-        from .spike_detector import TokenQuarantinedException
+def task_token_guard(
+    operation_type: Optional[str] = None,
+    tags: Optional[Dict[str, Any]] = None,
+) -> Callable[[Callable[P, R]], Callable[P, "TaskToken[R]"]]:
+    """Decorate a callable so calls return TaskToken instead of executing immediately.
 
-        if not hasattr(wrapper, "cached_metrics"):
-            wrapper.cached_metrics = CodeInspector.analyze(func)
-        metrics = wrapper.cached_metrics
+    The wrapper performs optional code analysis, optional quarantine checks,
+    optional storage-speed throttling, and token creation through the global
+    token pool.
 
-        final_tags = dict(tags) if tags else {}
-        final_func = func
+    Args:
+        operation_type: Stable operation label used for metadata and routing.
+        tags: Optional routing and policy tags, such as weight or storage tier.
+
+    Returns:
+        A decorator that replaces direct execution with token submission.
+
+    Notes:
+        The wrapped callable is not executed at call time. It is captured as a
+        token-managed task for later admission and execution.
+    """
+    def decorator(func: Callable[P, R]) -> Callable[P, "TaskToken[R]"]:
+        @wraps(func)
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> "TaskToken[R]":
+            from .code_inspector import CodeInspector
+            from .spike_detector import TokenQuarantinedException
+
+            if not hasattr(wrapper, "cached_metrics"):
+                wrapper.cached_metrics = CodeInspector.analyze(func)
+            metrics = wrapper.cached_metrics
+
+            final_tags = dict(tags) if tags else {} # Immutable copy of tags
+            final_func = func
         # ... Additional logic for handling tokens ...
 
 # The admission loop is an async function that continuously routes tokens.
@@ -620,38 +641,45 @@ def record_task_routed(self, core_id: int, weight: TaskWeight):
         self._affinity_counts[core_id][weight.value] += 1    
     
 # Async gathers task tokens setting them to the correct state for execution by workers.
-async def _execute_token(self, token: TaskToken, worker_id: str, core_id: int):
-    """
-    Worker is pre-pinned
-    """
-    # Transition to executing
-    if not token.transition_state(TokenState.EXECUTING):
-        print(f"[{worker_id.upper()}] Failed to transition {token.token_id}")
-        return
+    async def _execute_token(self, token: TaskToken, worker_id: str, core_id: int):
+        """Execute one admitted token on its already-selected core path.
 
-    start_time = time.time()
-    success = False
+        This method performs the lifecycle transition to EXECUTING, runs the
+        wrapped callable through the executor-backed path, stores the result or
+        error on the token, records execution history for the coordinator, and
+        triggers retry/Guard House hooks when configured.
+        """
+        # Transition to executing
+        if not token.transition_state(TokenState.EXECUTING):
+            print(f"[{worker_id.upper()}] Failed to transition {token.token_id}")
+            return
 
-    try:
-        # Execute function
-        result = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: token.func(*token.args, **token.kwargs))
+        start_time = time.time()
+        success = False
 
-        token.set_result(result)
-        self.total_executed += 1
-        success = True
+        try:
+            loop = asyncio.get_running_loop()
+            # This is now "partial" instead of lambda for better stability.
+            bound_func = partial(token.func, *token.args, **token.kwargs)
+            # We use run_in_executor to execute the task in a thread, 
+            # allowing us to manage concurrency and avoid blocking the event loop.
+            result = await loop.run_in_executor(None, bound_func) 
+            token.set_result(result)
+            self.total_executed += 1
+            success = True
 
-        print(f"[{worker_id.upper()}] ✓ Completed {token.token_id}")
+            print(f"[{worker_id.upper()}] ✓ Completed {token.token_id}")
 
-    except Exception as e:
-        # Failed!
-        token.set_error(e)
-        self.total_failed += 1
+        except Exception as e:
+            # Failed!
+            token.set_error(e)
+            self.total_failed += 1
+            if self.result_verbose:
+                print(f"[{worker_id.upper()}] ✗ Failed {token.token_id}: {e}")
 
-        print(f"[{worker_id.upper()}] ✗ Failed {token.token_id}: {e}")
-    finally:
-        execution_duration = time.time() - start_time
+        finally:
+            execution_duration = time.time() - start_time
+        # Additional execution recording and Guard House checks would go below here.
 ```
 
 ### Mailboxes:
@@ -745,8 +773,6 @@ def _build_preferences(self):
         )
     }
 
-# The system utilizes preference chains to determine   
-# if a token can be scheduled on a given core.
 def get_preference_chain(self, weight: TaskWeight) -> List[int]:
     """Get an ordered list of cores to try for this weight."""
     return self.preferences[weight].allowed_cores
