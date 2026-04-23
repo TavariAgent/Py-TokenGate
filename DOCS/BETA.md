@@ -39,12 +39,6 @@ stable and actively tested, edge cases and rough spots are expected at this stag
 
 ### Detailed startup guide:
 
-#### Running the WebSocket server:
-```bash
-python launch_gui.py OR python -m your_package_root.launch_gui
-```
-*(Note: Adjust the path if running from outside the repository root).*
-
 #### Using OperationsCoordinator without WebSocket:
 ```python
 from operations_coordinator import OperationsCoordinator # Must accompany main()
@@ -80,6 +74,13 @@ def data_processing_task(task_data):
     # Simulate a data processing task
     return result
 ```
+
+#### Running the WebSocket server:
+```bash
+python launch_gui.py OR python -m your_package_root.launch_gui
+```
+*(Note: Adjust the path if running from outside the repository root).*
+
 
 #### Using OperationsCoordinator with WebSocket:
 ```python
