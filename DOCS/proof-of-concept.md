@@ -777,8 +777,9 @@ def get_preference_chain(self, weight: TaskWeight) -> List[int]:
     """Get an ordered list of cores to try for this weight."""
     return self.preferences[weight].allowed_cores
 
-# After establishing chain routing and core identity routing, the system  
-# checks if a token can be scheduled on a given core based on its weight.
+# The system uses "chain position routing" to ensure that tokens are processed in the order  
+# they were received, while still respecting their core affinity and mailbox placements.
+# The exact order is: Admission -> core preference routing -> mailbox assignment -> worker execution.
 def can_use_core(self, weight: TaskWeight, core_id: int) -> bool:
     """Check if this weight is allowed on this core."""
     return core_id in self.preferences[weight].allowed_cores
