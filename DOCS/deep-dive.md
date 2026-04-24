@@ -355,7 +355,7 @@ async def _worker_loop(self, worker_idx: int, worker_id: str, core_id: int, loca
 
 ```python
 # The event loop runner isolates the execution plane by generating the components   
-# needed to operate the worker queue and admission gate, running indefinately.
+# needed to operate the worker queue and admission gate.
 def _run_event_loop(self):
     """Own and run the coordinator's background asyncio event loop.
 

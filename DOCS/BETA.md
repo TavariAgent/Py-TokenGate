@@ -15,7 +15,7 @@ stable and actively tested, edge cases and rough spots are expected at this stag
 - **WebSocket support:** TokenGate includes support for WebSocket communication, enabling real-time  
     monitoring and control of tasks.
 - ***DoS protection*:** The token system includes built-in DoS protection ("auto-blocking") to prevent overwhelming    
-    the system with too many concurrent tasks.
+    the system with too many "failed" concurrent tasks. (Tasks which do not return their result are "failed".)
 - **Telemetry:** TokenGate provides telemetry data for tasks, allowing for monitoring and debugging of concurrent   
     operations with clarity.
 
@@ -91,8 +91,9 @@ get_global_coordinator() # One line at module-level to rule the whole WebSocket!
 
 # No specific calls for main using the WebSocket
 def main():
-    try:
     # Main is free now!
+    try:
+        pass
     finally:
         pass
 
@@ -139,3 +140,5 @@ When you first set up your WebSocket environment and want to run a task, you sho
 TokenGate is an active beta project that aims to provide a powerful and flexible concurrency management system   
 using tokens. While it is currently functional, there are still areas for improvement and optimization. I encourage   
 users to explore the project, provide feedback, and contribute to its development. 📦 🚀
+
+To quickly reach out to the Developers go here and drop a message (all forms of feedback are accepted): [Tavari](https/tavari.online)
