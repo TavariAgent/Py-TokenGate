@@ -141,4 +141,4 @@ TokenGate is an active beta project that aims to provide a powerful and flexible
 using tokens. While it is currently functional, there are still areas for improvement and optimization. I encourage   
 users to explore the project, provide feedback, and contribute to its development. 📦 🚀
 
-To quickly reach out to the developers go here and drop a message (all forms of feedback are accepted): [Tavari](https/tavari.online)
+To quickly reach out to the developers go here and drop a message (all forms of feedback are accepted): [Tavari](https://www.tavari.online)
