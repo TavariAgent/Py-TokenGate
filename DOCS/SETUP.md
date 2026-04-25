@@ -22,7 +22,7 @@ pip install -r requirements.txt
 class OperationsCoordinator: # Under this class are where you find configurations for-
     def __init__( # controlling the workers per-core and parallel executors.
             self, 
-            workers_per_core: int = 4, # Controls number of workers and may notgo under 2 workers.
+            workers_per_core: int = 4, # Do not modify this without disabling convergence! Do not go under 2 workers.
             enable_convergence: bool = True, # Controls dynamic worker counts.
             convergence_verbose: bool = False, # DO NOT ENABLE INSIDE A REPL!!!
             base_memory_budget_mb: int = 45, # This is a control for operation memory (adjustable).

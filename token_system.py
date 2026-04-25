@@ -66,30 +66,21 @@ class TokenMetadata:
         return time.time() - self.created_at
 
     def wait_time(self) -> Optional[float]:
-        """Return seconds spent waiting for admission, if admitted."""
-        if self.admitted_at:
-            return self.admitted_at - self.created_at
-        return None
+        return (self.admitted_at - self.created_at) if self.admitted_at else None
 
     def execution_time(self) -> Optional[float]:
-        """Return execution duration in seconds, if execution has started."""
         if self.started_at:
-            end = self.completed_at or time.time()
-            return end - self.started_at
+            return (self.completed_at or time.time()) - self.started_at
         return None
 
 
 T = TypeVar("T")
+P = ParamSpec("P")
+R = TypeVar("R")
+
 
 class TaskToken(Generic[T]):
-    """Represents a deferred task submission managed by the token system.
-
-    A TaskToken captures the target callable, its arguments, routing metadata,
-    lifecycle state, and the future used to deliver the eventual result.
-
-    The token is created immediately, but the wrapped callable is executed
-    later by the coordinator/execution layer after admission.
-    """
+    """Represents a deferred task submission managed by the token system."""
     def __init__(
             self,
             token_id: str,
@@ -119,16 +110,8 @@ class TaskToken(Generic[T]):
         self._killed_reason: Optional[str] = None
 
     def transition_state(self, new_state: TokenState) -> bool:
-        """Attempt a validated lifecycle transition.
-
-        Transitions are guarded by an internal lock and only allowed when the
-        requested state is valid for the token's current state. Lifecycle
-        timestamps are updated on successful transitions, and an optional
-        state-change callback is invoked after the lock is released.
-
-        Returns:
-            True if the transition succeeded, otherwise False.
-        """
+        """Attempt a validated lifecycle transition with tg_print visibility."""
+        from .tg_print import tg_print   # local import avoids circular at module level
         cb = None
         old_state = None
         with self._state_lock:
@@ -159,32 +142,33 @@ class TaskToken(Generic[T]):
             elif new_state in {TokenState.COMPLETED, TokenState.FAILED, TokenState.KILLED, TokenState.TIMEOUT}:
                 self.metadata.completed_at = now
 
+        # Emit state transition visibility
+        tg_print(
+            'token',
+            f'{self.token_id}  {old_state.value} -> {new_state.value}'
+            f'  op={self.metadata.operation_type}',
+            level='state',
+        )
+
         if cb:
             cb(self, old_state, new_state)
 
         return True
 
     def kill(self, reason: str = "admin_override"):
-        """Request token termination and mark the result future as failed.
-
-        Sets the internal kill flag, records the reason, and attempts to move the
-        token into the KILLED state. If successful, waiting callers will receive
-        TaskKilledException from the result future.
-
-        Returns:
-            True if the token was transitioned to KILLED, otherwise False.
-        """
+        """Kills the active token."""
+        from .tg_print import tg_print
         self._kill_requested.set()
         self._killed_reason = reason
 
         if self.transition_state(TokenState.KILLED):
+
             # Set exception in future
             self._result_future.set_exception(
                 TaskKilledException(f"Token killed: {reason}")
             )
-            print(f"[KILL] Token {self.token_id} killed: {reason}")
+            tg_print('token', f'{self.token_id} killed — {reason}', level='warn')
             return True
-
         return False
 
     def is_killed(self) -> bool:
@@ -198,15 +182,16 @@ class TaskToken(Generic[T]):
         self._result_future.set_result(result)
 
     def set_error(self, error: Exception):
-        """Store an execution error and transition the token to FAILED."""
+        """Store an execution error and transition state."""
+        from .tg_print import tg_print
         self._error = error
         self.transition_state(TokenState.FAILED)
         self._result_future.set_exception(error)
+        tg_print('token', f'{self.token_id} failed — {error}', level='error')
 
     def get(self, timeout: Optional[float] = None) -> T:
         """Block until the token resolves or the timeout expires."""
         return self._result_future.result(timeout=timeout)
-
 
     def get_status(self) -> dict:
         """Return a snapshot of token state and timing information."""
@@ -226,11 +211,8 @@ class TaskToken(Generic[T]):
 
 
 class TaskKilledException(Exception):
-    """Raised when a token is killed by admin."""
     pass
 
-P = ParamSpec("P")
-R = TypeVar("R")
 
 class TokenPool:
     """Thread-safe registry and admission queue for task tokens.
@@ -270,17 +252,9 @@ class TokenPool:
             operation_type: Optional[str] = None,
             tags: Dict[str, Any] | None = None
     ) -> "TaskToken[R]":
-        """Create, register, and enqueue a token for later admission.
+        from .tg_print import tg_print
 
-        The token is created synchronously and stored in the pool immediately.
-        If an event loop and async token queue are configured, the token is also
-        submitted to the async admission queue.
-
-        Returns:
-            The created TaskToken instance.
-        """
         self.total_created += 1
-        # Combine timestamp + counter — collision-proof at any call rate
         token_id = f"{operation_type}_{time.time_ns()}_{next(_token_id_counter)}"
 
         metadata = TokenMetadata(
@@ -294,14 +268,17 @@ class TokenPool:
         with self._lock:
             self.tokens[token_id] = token
 
+        tg_print('pool', f'Token created  {token_id}  op={operation_type}', level='debug')
+
         token.transition_state(TokenState.WAITING)
+
         if self._event_loop:
             asyncio.run_coroutine_threadsafe(
                 self._token_queue.put(token),
                 self._event_loop
             )
         else:
-            print(f"[POOL] WARNING: No event loop...")
+            tg_print('pool', 'No event loop — token queued but not dispatched', level='warn')
 
         return token
 
@@ -365,33 +342,36 @@ class TokenPool:
         return False
 
     def kill_all_by_operation(self, operation_type: str, reason: str = "admin_bulk_kill"):
-        """Kill all registered tokens matching an operation type."""
+        """Kill all tokens with the given operation type."""
+        from .tg_print import tg_print
         tokens = self.get_tokens_by_operation(operation_type)
         killed = 0
         for token in tokens:
             if token.kill(reason):
                 killed += 1
-
         self.total_killed += killed
-        print(f"[POOL] Killed {killed} tokens of type {operation_type}")
+        tg_print('pool', f'Killed {killed} tokens of type {operation_type}')
         return killed
 
     def pause(self, operation_type: str = None, reason: str = "admin_pause"):
-        """Pause token admission globally or for a specific operation type."""
+        """Pause token or pool."""
+        from .tg_print import tg_print
         if operation_type:
             with self._lock:
                 self._paused_operations.add(operation_type)
-            print(f"[POOL] PAUSED operation: {operation_type} ({reason})")
+            tg_print('pool', f'PAUSED operation: {operation_type}  ({reason})', level='warn')
         else:
             self._paused.clear()
-            print(f"[POOL] PAUSED globally ({reason}) - tokens will accumulate")
+            tg_print('pool', f'PAUSED globally ({reason}) — tokens will accumulate', level='warn')
 
     def resume(self, operation_type: str = None, reason: str = "admin_resume"):
-        """Resume token admission globally or for a specific operation type."""
+        """Resume token or pool."""
+        from .tg_print import tg_print
         if operation_type:
             tokens_to_requeue = []
             with self._lock:
                 self._paused_operations.discard(operation_type)
+
                 # Retrieve held tokens
                 if operation_type in self._paused_holding:
                     tokens_to_requeue = self._paused_holding.pop(operation_type)
@@ -400,17 +380,20 @@ class TokenPool:
             if self._event_loop and tokens_to_requeue:
                 for token in tokens_to_requeue:
                     asyncio.run_coroutine_threadsafe(
-                        self._token_queue.put(token),
-                        self._event_loop
+                        self._token_queue.put(token), self._event_loop
                     )
-            print(
-                f"[POOL] RESUMED operation: {operation_type} ({reason}) - requeued {len(tokens_to_requeue)} held tokens")
+            tg_print(
+                'pool',
+                f'RESUMED operation: {operation_type}  ({reason})'
+                f' — requeued {len(tokens_to_requeue)} held tokens',
+            )
         else:
             self._paused.set()
-            print(f"[POOL] RESUMED globally ({reason}) - tokens will admit")
+            tg_print('pool', f'RESUMED globally ({reason}) — tokens will admit')
 
     def drain(self, operation_type: str = None, reason: str = "admin_drain") -> int:
-        """Kill waiting tokens, either globally or matching a specific operation type."""
+        """Drain the token or pool."""
+        from .tg_print import tg_print
         waiting = self.get_tokens_by_state(TokenState.WAITING)
         killed = 0
 
@@ -418,35 +401,31 @@ class TokenPool:
             if operation_type is None or token.metadata.operation_type == operation_type:
                 if token.kill(reason):
                     killed += 1
-
         self.total_killed += killed
-        print(f"[POOL] DRAINED - killed {killed} waiting tokens (op_type={operation_type})")
+        tg_print('pool', f'DRAINED — killed {killed} waiting tokens  op={operation_type}', level='warn')
         return killed
 
     def get_stats(self) -> dict:
-        """Get pool statistics for dashboard."""
-        tokens_by_state = {}
-        for state in TokenState:
-            tokens_by_state[state.value] = len(self.get_tokens_by_state(state))
-
+        """Get current metrics about the token pool."""
+        tokens_by_state = {s.value: len(self.get_tokens_by_state(s)) for s in TokenState}
         return {
-            'total_created': self.total_created,
-            'total_killed': self.total_killed,
-            'total_admitted': self.total_admitted,
-            'current_tokens': len(self.tokens),
+            'total_created':   self.total_created,
+            'total_killed':    self.total_killed,
+            'total_admitted':  self.total_admitted,
+            'current_tokens':  len(self.tokens),
             'tokens_by_state': tokens_by_state,
-            'paused': not self._paused.is_set()
+            'paused':          not self._paused.is_set(),
         }
 
     @staticmethod
     def _get_loop():
-        """Get or create an event loop."""
         try:
             return asyncio.get_event_loop()
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             return loop
+
 
 # ============================================================================
 # DECORATOR - The user-facing API
@@ -477,26 +456,22 @@ def task_token_guard(
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> "TaskToken[R]":
             from .code_inspector import CodeInspector
             from .spike_detector import TokenQuarantinedException
+            from .tg_print import tg_print
 
             if not hasattr(wrapper, "cached_metrics"):
                 wrapper.cached_metrics = CodeInspector.analyze(func)
             metrics = wrapper.cached_metrics
-
-            final_tags = dict(tags) if tags else {}  # copy, don't mutate shared dict
+            final_tags = dict(tags) if tags else {} # Immutable
             final_func = func
 
             # Check Guard House for spike detection
             if hasattr(global_token_pool, 'spike_detector') and global_token_pool.spike_detector:
                 spike_detector = global_token_pool.spike_detector
                 quarantine_mgr = global_token_pool.quarantine_mgr
-
                 should_q, deviation, reason = spike_detector.should_quarantine(
-                    func.__name__,
-                    metrics
+                    func.__name__, metrics
                 )
-
                 if should_q:
-                    # QUARANTINE!
                     quarantine_mgr.quarantine_token(
                         token_id=f"{operation_type}_{time.time_ns()}",
                         method_name=func.__name__,
@@ -518,16 +493,10 @@ def task_token_guard(
                         f"Check quarantine.json for details."
                     )
 
-            # ================================================================
-            # Check for storage speed tier tag
-            # ================================================================
-
             if 'storage_speed' in final_tags:
                 # Storage throttling requested!
                 speed_tier = final_tags['storage_speed']
-
                 from .storage_throttle import get_storage_throttle
-
                 throttle_mgr = get_storage_throttle()
 
                 # Create throttled wrapper
@@ -543,12 +512,19 @@ def task_token_guard(
 
                 # Optional: Log first time we see this operation
                 if not hasattr(wrapper, '_storage_logged'):
-                    print(f"[STORAGE] Auto-throttling enabled: '{operation_type}' → {speed_tier} tier")
+                    tg_print(
+                        'storage',
+                        f"Auto-throttling enabled: '{operation_type}' -> {speed_tier} tier",
+                    )
                     wrapper._storage_logged = True
 
-            # ================================================================
-            # Create token (with potentially throttled function)
-            # ================================================================
+            # Dispatch visibility — shows before token enters the pool
+            tg_print(
+                'pool',
+                f'Submitting  fn={func.__name__}  op={operation_type}',
+                level='dispatch',
+            )
+
             token = global_token_pool.create_token(
                 func=final_func,
                 args=args,
@@ -556,7 +532,6 @@ def task_token_guard(
                 operation_type=operation_type,
                 tags=final_tags
             )
-
             token.metadata.tags["complexity_score"] = metrics.complexity_score
 
             cb = getattr(global_token_pool, "default_on_state_change", None)
@@ -570,5 +545,5 @@ def task_token_guard(
     return decorator
 
 
-# Global instance (created on import)
+# Global instance
 global_token_pool = TokenPool()

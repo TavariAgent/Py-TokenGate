@@ -13,6 +13,8 @@ import os
 from pathlib import Path
 from typing import List, Optional
 
+from tg_print import tg_print
+
 
 class AuthManager:
     """
@@ -46,8 +48,9 @@ class AuthManager:
         
         with open(self.config_file, 'w') as f:
             json.dump(self.config, f, indent=2)
-    
-    def _hash_password(self, password: str) -> str:
+
+    @staticmethod
+    def _hash_password(password: str) -> str:
         """Hash password using SHA-256 with salt."""
         salt = "schema2_threading_dashboard"  # Static salt for simplicity
         return hashlib.sha256((password + salt).encode()).hexdigest()
@@ -75,10 +78,10 @@ class AuthManager:
             self.config['whitelist_ips'] = []
         
         self._save_config()
-        
-        print("[AUTH] Initialized successfully")
+
+        tg_print('guard', 'Auth initialized successfully')
         if self.config['whitelist_enabled']:
-            print(f"[AUTH] IP whitelist enabled: {whitelist_ips}")
+            tg_print('guard', f'IP whitelist enabled: {whitelist_ips}')
     
     def verify_password(self, password: str) -> bool:
         """Verify password against stored hash."""
@@ -109,14 +112,14 @@ class AuthManager:
         if ip not in self.config['whitelist_ips']:
             self.config['whitelist_ips'].append(ip)
             self._save_config()
-            print(f"[AUTH] Added IP to whitelist: {ip}")
+            tg_print('guard', f'Added IP to whitelist: {ip}', level='debug')
     
     def remove_ip_from_whitelist(self, ip: str):
         """Remove IP from whitelist."""
         if ip in self.config['whitelist_ips']:
             self.config['whitelist_ips'].remove(ip)
             self._save_config()
-            print(f"[AUTH] Removed IP from whitelist: {ip}")
+            tg_print('guard', f'Removed IP from whitelist: {ip}', level='debug')
     
     def get_whitelist(self) -> List[str]:
         """Get current IP whitelist."""
@@ -139,5 +142,5 @@ class AuthManager:
         self.config['password_hash'] = self._hash_password(new_password)
         self._save_config()
         
-        print("[AUTH] Password changed successfully")
+        tg_print('guard', 'Auth password changed', level='debug')
         return True

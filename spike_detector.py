@@ -35,6 +35,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from datetime import datetime
 
+from tg_print import tg_print
 from .code_inspector import CodeMetrics
 
 
@@ -114,10 +115,10 @@ class SpikeDetector:
         self.extreme_threshold = extreme_threshold
         self.min_samples = min_samples
 
-        print(f"[SPIKE_DETECTOR] Initialized")
-        print(f"  Spike threshold: {spike_threshold * 100}%")
-        print(f"  Extreme threshold: {extreme_threshold * 100}%")
-        print(f"  Min samples: {min_samples}")
+        tg_print('guard', f'SpikeDetector initialized  '
+                          f'spike={spike_threshold * 100}%  '
+                          f'extreme={extreme_threshold * 100}%  '
+                          f'min_samples={min_samples}')
 
     def check_for_spike(
             self,
@@ -228,9 +229,8 @@ class QuarantineManager:
         # Load existing quarantine if exists
         self._load_quarantine()
 
-        print(f"[QUARANTINE_MANAGER] Initialized")
-        print(f"  Quarantine file: {self.quarantine_file}")
-        print(f"  Loaded {len(self.quarantined_tokens)} quarantined tokens")
+        tg_print('guard', f'QuarantineManager initialized  '
+                          f'file={self.quarantine_file}  loaded={len(self.quarantined_tokens)} tokens')
 
     def _load_quarantine(self):
         """Load existing quarantine file."""
@@ -253,7 +253,7 @@ class QuarantineManager:
                         self.total_rejected += 1
 
         except Exception as e:
-            print(f"[QUARANTINE_MANAGER] Error loading quarantine: {e}")
+            tg_print('guard', f'Error loading quarantine file: {e}', level='error')
 
     def _save_quarantine(self):
         """Save quarantine to JSON file."""
@@ -264,7 +264,7 @@ class QuarantineManager:
                 json.dump(data, f, indent=2)
 
         except Exception as e:
-            print(f"[QUARANTINE_MANAGER] Error saving quarantine: {e}")
+            tg_print('guard', f'Error saving quarantine file: {e}', level='error')
 
     def quarantine_token(
             self,
@@ -327,10 +327,9 @@ class QuarantineManager:
             # Save to disk
             self._save_quarantine()
 
-            print(f"[QUARANTINE] Token quarantined: {token_id}")
-            print(f"  Method: {method_name}")
-            print(f"  Deviation: {deviation_percent * 100:.1f}%")
-            print(f"  Reason: {reason}")
+            tg_print('guard', f'QUARANTINED: {token_id}  '
+                              f'method={method_name}  deviation={deviation_percent * 100:.1f}%', level='warn')
+            tg_print('guard', f'Reason: {reason}', level='warn')
 
             return quarantined
 
@@ -421,7 +420,7 @@ class QuarantineManager:
                     self.total_approved += 1
                     self._save_quarantine()
 
-                    print(f"[QUARANTINE] Token approved: {token_id}")
+                    tg_print('guard', f'Token approved: {token_id}')
                     return True
 
         return False
@@ -444,11 +443,12 @@ class QuarantineManager:
                     self.total_rejected += 1
                     self._save_quarantine()
 
-                    print(f"[QUARANTINE] Token rejected: {token_id}")
+                    tg_print('guard', f'Token rejected: {token_id}', level='warn')
                     return True
 
         return False
 
+    # TODO: Add quarantine report too the WebSocket dashboard
     def print_quarantine_report(self):
         """Print human-readable quarantine report."""
         with self._lock:

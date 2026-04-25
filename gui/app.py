@@ -34,6 +34,7 @@ except ImportError as e:
     raise
 
 from .auth import AuthManager
+from ..tg_print import tg_print
 
 # ============================================================================
 # Flask App Setup
@@ -512,7 +513,7 @@ def start_coordinator():
     """Start the global operations coordinator."""
     global coordinator, metrics_thread, running
 
-    print("[GUI] Starting operations coordinator...")
+    tg_print('coordinator', 'GUI: Starting operations coordinator...')
 
     # Use global singleton (creates if needed, returns existing if present)
     coordinator = get_global_coordinator()
@@ -526,17 +527,17 @@ def start_coordinator():
     )
     metrics_thread.start()
 
-    print("[GUI] Coordinator started successfully")
+    tg_print('coordinator', 'GUI: Coordinator started successfully')
 
 def stop_coordinator():
     """Stop metrics broadcast (but don't stop coordinator - it's global!)."""
     global running
 
     if coordinator:
-        print("[GUI] Stopping metrics broadcast...")
+        tg_print('coordinator', 'GUI: Stopping metrics broadcast...')
         running = False
         coordinator.stop()
-        print("[GUI] Metrics broadcast stopped")
+        tg_print('coordinator', 'GUI: Metrics broadcast stopped')
 
 
 # ============================================================================

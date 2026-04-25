@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from enum import Enum
 from queue import Queue
 from typing import List
-
+from .tg_print import tg_print
 
 class TaskWeight(Enum):
     """Routing weight classes used by the affinity policy."""
@@ -76,10 +76,10 @@ class CoreAffinityPolicy:
             )
         }
 
-        print(f"[AFFINITY] Policy for {self.num_cores} cores:")
-        print(f"  Heavy:  {heavy_cores} (preferred: {heavy_cores[0]})")
-        print(f"  Medium: {medium_cores} (preferred: {medium_cores[0] if medium_cores else 'N/A'})")
-        print(f"  Light:  {light_cores} (preferred: {light_cores[0] if light_cores else 'N/A'})")
+        tg_print('affinity', f'Policy built for {self.num_cores} cores')
+        tg_print('affinity', f'Heavy:  {heavy_cores}  preferred={heavy_cores[0]}')
+        tg_print('affinity', f'Medium: {medium_cores}  preferred={medium_cores[0] if medium_cores else "N/A"}')
+        tg_print('affinity', f'Light:  {light_cores}  preferred={light_cores[0] if light_cores else "N/A"}')
 
     def get_preference_chain(self, weight: TaskWeight) -> List[int]:
         """Return allowed cores for the given weight in preference order."""
@@ -236,6 +236,7 @@ class CoreAffinityQueue:
             'affinity_distribution': affinity_report
         }
 
+    # TODO: Add this too the dashboard in a live core viewer
     def print_affinity_report(self):
         """Print a human-readable per-core affinity distribution report."""
         print()

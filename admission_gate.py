@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 # admission_gate.py
-"""
-Admission and execution-queue base contracts.
+"""Admission and execution-queue base contracts.
 
 This module defines the admission gate that transfers eligible tokens from the
 token pool into the execution queue, along with the minimal abstract interface
@@ -12,16 +11,11 @@ import asyncio
 from typing import Optional
 
 from .token_system import TaskToken, TokenPool, TokenState
+from .tg_print import tg_print
 
 
 class AdmissionGate:
-    """Pass-through admission layer between the token pool and worker queue.
-
-    The gate retrieves tokens from the pool, filters out killed tokens,
-    performs admission-state transitions, and forwards tokens into the
-    execution queue.
-    """
-
+    """Pass-through admission layer between the token pool and worker queue."""
     def __init__(
             self,
             token_pool: TokenPool,
@@ -33,9 +27,6 @@ class AdmissionGate:
         self.worker_queue = worker_queue
         self.worker_pool = worker_pool
         self.policy = policy
-
-
-        # Control
         self._active = False
         self._loop_task: Optional[asyncio.Task] = None
 
@@ -46,10 +37,9 @@ class AdmissionGate:
         """Start the background admission loop."""
         if self._active:
             return
-
         self._active = True
         self._loop_task = asyncio.create_task(self._admission_loop())
-        print("[GATE] Admission gate started - full saturation mode")
+        tg_print('gate', 'Admission gate started — full saturation mode')
 
     async def stop(self):
         """Stop the admission loop and await task cancellation."""
@@ -60,16 +50,11 @@ class AdmissionGate:
                 await self._loop_task
             except asyncio.CancelledError:
                 pass
-        print("[GATE] Admission gate stopped")
+        tg_print('gate', 'Admission gate stopped')
 
     async def _admission_loop(self):
-        """Continuously move eligible tokens from the pool into the worker queue.
-
-        This loop does not apply throughput throttling. It performs killed-token
-        filtering, forwards admitted tokens, and briefly backs off only after
-        unexpected loop errors.
-        """
-        print("[GATE] Admission loop started - unrestricted flow")
+        """Continuously move eligible tokens from the pool into the worker queue."""
+        tg_print('gate', 'Admission loop started — unrestricted flow')
 
         while self._active:
             try:
@@ -78,6 +63,7 @@ class AdmissionGate:
 
                 # Skip killed tokens
                 if token.is_killed():
+                    tg_print('gate', f'Skipping killed token {token.token_id}', level='debug')
                     continue
 
                 # Route directly to execution
@@ -86,18 +72,28 @@ class AdmissionGate:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f"[GATE] Error in admission loop: {e}")
-                await asyncio.sleep(0.1)  # Brief pause on error only
+                tg_print('gate', f'Error in admission loop: {e}', level='error')
+                await asyncio.sleep(0.1) # Breif pause only on errors!
 
     async def _admit_token(self, token: TaskToken):
         """Transition a token into the admitted state and enqueue it for execution."""
         # Transition state
         if not token.transition_state(TokenState.ADMITTED):
-            print(f"[GATE] Failed to admit token {token.token_id} (state: {token.state})")
+            tg_print(
+                'gate',
+                f'Failed to admit token {token.token_id} (state: {token.state})',
+                level='warn',
+            )
             return
 
         if token.state == TokenState.CREATED:
             token.transition_state(TokenState.WAITING)
+
+        tg_print(
+            'gate',
+            f'{token.token_id}  op={token.metadata.operation_type}  -> ADMITTED',
+            level='state',
+        )
 
         # Route to worker queue
         await self.worker_queue.put(token)
@@ -150,9 +146,8 @@ class WorkerTaskQueue:
 
         # Wait for them to finish
         await asyncio.gather(*self._execution_tasks, return_exceptions=True)
-
         self._execution_tasks = []
-        print("[WORKER_QUEUE] Stopped all executors")
+        tg_print('worker', 'Stopped all executors')
 
     async def put(self, token: TaskToken):
         """Enqueue one admitted token for backend-specific execution routing."""

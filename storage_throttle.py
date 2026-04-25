@@ -26,6 +26,8 @@ import time
 from typing import Dict, Callable, Any, Optional
 from dataclasses import dataclass
 
+from tg_print import tg_print
+
 # ============================================================================
 # SPEED TIER CONFIGURATION
 # ============================================================================
@@ -158,9 +160,9 @@ class StorageThrottleManager:
         for tier, limit in self.speed_config.items():
             self.throttles[tier] = StorageThrottle(tier, limit)
 
-        print("[STORAGE_THROTTLE] Initialized with speed tiers:")
+        tg_print('storage', 'StorageThrottleManager initialized')
         for tier, limit in self.speed_config.items():
-            print(f"  {tier}: {limit} concurrent I/O")
+            tg_print('storage', f'  {tier}: {limit} concurrent I/O', level='debug')
 
     def get_throttle(self, speed_tier: str) -> StorageThrottle:
         """
@@ -177,7 +179,7 @@ class StorageThrottleManager:
 
         if tier not in self.throttles:
             # Unknown tier - default to MODERATE
-            print(f"[STORAGE_THROTTLE] Warning: Unknown tier '{speed_tier}', using MODERATE")
+            tg_print('storage', f"Unknown tier '{speed_tier}' — defaulting to MODERATE", level='warn')
             tier = 'moderate'
 
         return self.throttles[tier]
@@ -205,6 +207,7 @@ class StorageThrottleManager:
             for tier, throttle in self.throttles.items()
         }
 
+    # TODO: Add too WebSocket dashboard
     def print_stats(self):
         """Print statistics."""
         print()
@@ -251,9 +254,9 @@ class StorageThrottleManager:
             # Create new throttle with new limit
             self.throttles[tier] = StorageThrottle(tier, new_limit)
 
-            print(f"[STORAGE_THROTTLE] Updated {tier}: {old_limit} -> {new_limit}")
+            tg_print('storage', f'Speed limit updated: {tier}  {old_limit} -> {new_limit}')
         else:
-            print(f"[STORAGE_THROTTLE] Unknown tier: {tier}")
+            tg_print('storage', f'Unknown tier in update_speed_limit: {tier}', level='warn')
 
 
 # ============================================================================

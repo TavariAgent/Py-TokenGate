@@ -18,6 +18,7 @@ from enum import Enum
 from typing import Dict, Optional, Tuple
 
 from .code_inspector import CodeMetrics, ComplexityLevel
+from .tg_print import tg_print
 
 
 class OptimizationDecision(Enum):
@@ -154,11 +155,10 @@ class AllocationOptimizer:
 
             self.allocations[operation_name] = allocation
 
-            print(f"[OPTIMIZER] Initialized {operation_name}")
-            print(f"  Complexity: {metrics.complexity_level.name}")
-            print(f"  Baseline Allocation: {allocation.baseline_allocation_mb} MB")
-            print(f"  Baseline Confidence: {allocation.baseline_confidence}%")
-            print(f"  Optimization Rate: {allocation.get_optimization_rate() * 100}%")
+            tg_print('overflow', f'Optimizer initialized: {operation_name}', level='debug')
+            tg_print('overflow', f'Complexity: {metrics.complexity_level.name}  '
+                     f'baseline={allocation.baseline_allocation_mb} MB  '
+                     f'confidence={allocation.baseline_confidence}%', level='debug')
 
             return allocation
 
@@ -223,8 +223,7 @@ class AllocationOptimizer:
         """
         decision, reasoning = self.can_optimize(operation_name, current_confidence)
 
-        print(f"[OPTIMIZER] {operation_name}: {decision.value}")
-        print(f"  Reasoning: {reasoning}")
+        tg_print('overflow', f'Optimizer {operation_name}: {decision.value}  — {reasoning}', level='debug')
 
         if decision != OptimizationDecision.OPTIMIZE:
             return None
@@ -240,9 +239,8 @@ class AllocationOptimizer:
             min_allocation = int(allocation.baseline_allocation_mb * 0.5)
             new_allocation = max(new_allocation, min_allocation)
 
-            print(f"  Current: {allocation.current_allocation_mb} MB")
-            print(f"  Reduction: {rate * 100}%")
-            print(f"  New: {new_allocation} MB")
+            tg_print('overflow', f'Reducing: {allocation.current_allocation_mb} '
+                                 f'MB -> {new_allocation} MB  ({rate * 100}% reduction)', level='debug')
 
             # Mark as optimizing
             allocation.currently_optimizing = True
@@ -290,10 +288,9 @@ class AllocationOptimizer:
 
             confidence_delta = new_confidence - allocation.last_observed_confidence
 
-            print(f"[OPTIMIZER] Result for {operation_name}:")
-            print(f"  Success: {success}")
-            print(f"  Confidence: {allocation.last_observed_confidence}% -> {new_confidence}%")
-            print(f"  Delta: {confidence_delta:+.1f}%")
+            tg_print('overflow', f'Optimizer result: {operation_name}  '
+                                 f'success={success}  confidence {allocation.last_observed_confidence}% -> {new_confidence}%  '
+                                 f'delta={confidence_delta:+.1f}%', level='debug')
 
             if success and confidence_delta > 0:
                 # SUCCESS + CONFIDENCE GAIN -> RATCHET UP!
@@ -311,19 +308,19 @@ class AllocationOptimizer:
                     # Normal cap at 95%
                     new_boundary = min(new_boundary, self.MAX_BOUNDARY)
 
-                print(f"  OK RATCHET: Boundary {allocation.confidence_boundary}% -> {new_boundary}%")
+                tg_print('overflow', f'Ratchet: boundary {allocation.confidence_boundary}% -> {new_boundary}%', level='debug')
 
                 allocation.confidence_boundary = new_boundary
                 allocation.last_observed_confidence = new_confidence
 
             elif success and confidence_delta <= 0:
                 # SUCCESS but NO GAIN -> HOLD
-                print(f"  WARNING HOLD: Success but confidence didn't gain")
+                tg_print('overflow', f'Hold: {operation_name} succeeded but confidence did not gain', level='debug')
                 allocation.last_observed_confidence = new_confidence
 
             else:
                 # FAILURE -> REVERT
-                print(f"  ERROR REVERT: Execution failed")
+                tg_print('overflow', f'Revert: {operation_name} failed — restoring allocation', level='warn')
 
                 # Revert to previous allocation
                 rate = allocation.get_optimization_rate()
@@ -335,8 +332,8 @@ class AllocationOptimizer:
 
                 self.total_optimizations_reverted += 1
 
-                print(f"  Reverted to: {allocation.current_allocation_mb} MB")
-                print(f"  Boundary reset to: {allocation.confidence_boundary}%")
+                tg_print('overflow', f'Reverted to {allocation.current_allocation_mb} '
+                                     f'MB  boundary reset to {allocation.confidence_boundary}%', level='warn')
 
     def get_allocation(self, operation_name: str) -> Optional[int]:
         """Return the current allocation for the operation, if tracked."""
@@ -370,6 +367,7 @@ class AllocationOptimizer:
                 }
             }
 
+    # TODO: Add too guard house dashboard
     def print_portfolio(self):
         """Print a human-readable summary of all tracked allocation state."""
         with self._lock:

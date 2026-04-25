@@ -23,6 +23,7 @@ from .threading_metrics import get_metrics
 from .token_system import TaskToken, TokenState
 from .admission_gate import WorkerTaskQueue
 from .core_affinity_queue import TaskWeight
+from .tg_print import tg_print
 
 
 
@@ -101,13 +102,12 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         self._active = False
         self._execution_tasks = []
 
-        print(f"[CORE_PINNED_QUEUE] Initialized:")
-        print(f"  Cores: {num_cores}")
-        print(f"  Workers per core: {workers_per_core}")
-        print(f"  Total workers: {self.total_workers}")
-        print(f"  Core-worker mapping:")
+        tg_print('worker', f'CorePinnedQueue initialized  '
+                           f'cores={num_cores}  '
+                           f'workers_per_core={workers_per_core}  '
+                           f'total={self.total_workers}')
         for core_id, workers in self.core_workers.items():
-            print(f"    Core {core_id}: Workers {workers}")
+            tg_print('worker', f'Core {core_id}: workers {workers}', level='debug')
 
     async def _mailbox_monitor_loop(self):
         """Periodically sample mailbox depths for active workers on each core."""
@@ -141,6 +141,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
 
     def set_core_pattern(self, core_id: int, pattern_value: int):
         """Set the number of active mailbox workers for a core."""
+        tg_print('worker', f'Core {core_id} pattern set to {pattern_value}', level='dispatch')
         self.core_patterns[core_id] = int(pattern_value)
         self.metrics.update_pattern(core_id, int(pattern_value))
 
@@ -160,7 +161,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         """
         # Transition to executing
         if not token.transition_state(TokenState.EXECUTING):
-            print(f"[{worker_id.upper()}] Failed to transition {token.token_id}")
+            tg_print('worker', f'{worker_id} failed to transition {token.token_id}', level='warn')
             return
 
         start_time = time.time()
@@ -174,17 +175,22 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
             self.total_executed += 1
             success = True
 
-            print(f"[{worker_id.upper()}] ✓ Completed {token.token_id}")
+            tg_print('worker', f'{worker_id} completed {token.token_id}', level='state')
 
         except Exception as e:
             # Failed!
             token.set_error(e)
             self.total_failed += 1
             if self.result_verbose:
-                print(f"[{worker_id.upper()}] ✗ Failed {token.token_id}: {e}")
+                tg_print('worker', f'{worker_id} failed {token.token_id}: {e}', level='error')
 
         finally:
             execution_duration = time.time() - start_time
+
+            if execution_duration > 30.0:
+                tg_print('worker', f'{token.token_id} '
+                                   f'slow execution: {execution_duration:.1f}s  '
+                                   f'op={token.metadata.operation_type}', level='warn')
 
             # RECORD EXECUTION FOR GUI
             if self.coordinator:
@@ -204,7 +210,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
 
                 self.coordinator.record_execution(record)
             else:
-                print(f"[DEBUG] No coordinator to record to!")
+                tg_print('worker', 'No coordinator available for execution record', level='warn')
 
                 # CHECK FOR RETRY (if coordinator and overflow guard available)
             guard = None
@@ -242,13 +248,13 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
 
                     # Create a retry token if needed
                     if should_retry:
-                        print(f"[{worker_id.upper()}] Triggering retry for {token.token_id}")
+                        tg_print('worker', f'{worker_id} triggering retry for {token.token_id}', level='dispatch')
                         retry_token = guard.create_retry_token(token, execution_duration)
 
                         if retry_token:
-                            print(f"[{worker_id.upper()}] Created retry: {retry_token.token_id}")
+                            tg_print('worker', f'{worker_id} created retry: {retry_token.token_id}', level='dispatch')
                         else:
-                            print(f"[{worker_id.upper()}] Retries exhausted for {token.token_id}")
+                            tg_print('worker', f'{worker_id} retries exhausted for {token.token_id}', level='warn')
 
                 # Record result in Guard House
                 if hasattr(self.coordinator, 'guard_house'):
@@ -357,7 +363,8 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
 
         self.worker_positions[worker_id] = positions
 
-        print(f"[CORE_PINNED] Worker {worker_id} (Core {core_id}): {positions[:5]}... (every {self.total_workers})")
+        tg_print('worker', f'Worker {worker_id} core={core_id}  '
+                           f'positions={positions[:5]}... stride={self.total_workers}', level='debug')
 
     def assign_position_for_token(self, token: TaskToken) -> int:
         """Assign a staggered global route position for a token.
@@ -390,7 +397,8 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         self.core_position_counters[chosen_core] += 1
 
         if self.result_verbose:
-            print(f"[ROUTING] Token {token.token_id} ({weight.value}) → Pos {position} (Core {chosen_core}, Pattern {active_workers})")
+            tg_print('worker', f'Routed {token.token_id}  weight={weight.value}  '
+                               f'pos={position}  core={chosen_core}  pattern={active_workers}', level='dispatch')
         return position
 
     async def put(self, token: "TaskToken"):
@@ -432,6 +440,8 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
             # Soft fallback: try least-loaded active worker again (queues can fill unevenly)
             local_i = self._choose_local_worker_least_loaded(core_id)
             q = self.mailboxes[(core_id, local_i)]
+            tg_print('worker', f'Mailbox full on core {core_id} '
+                               f'falling back to least-loaded worker {local_i}', level='warn')
             # If still full, await a slot (true backpressure) instead of dropping
             await q.put(token)
 
@@ -462,7 +472,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
                 if key not in self.mailboxes:
                     self.mailboxes[key] = asyncio.Queue(maxsize=self.MAILBOX_MAX)
 
-        print(f"[CORE_PINNED_QUEUE] Starting {self.total_workers} mailbox workers...")
+        tg_print('worker', f'Starting {self.total_workers} mailbox workers...')
         for worker_idx in range(self.total_workers):
             core_id = (worker_idx // self.workers_per_core) + 1
             local_i = worker_idx % self.workers_per_core
@@ -474,12 +484,12 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
             )
             self._execution_tasks.append(task)
 
-        print(f"[CORE_PINNED_QUEUE] Started {self.total_workers} workers across {self.num_cores} cores")
+        tg_print('worker', f'Started {self.total_workers} workers across {self.num_cores} cores')
 
     async def _worker_loop(self, worker_idx: int, worker_id: str, core_id: int, local_i: int): # DO NOT REMOVE "worker_idx"!
         """Continuously consume one mailbox and execute admitted tokens."""
         q = self.mailboxes[(core_id, local_i)]
-        print(f"[{worker_id}] Started on Core {core_id} (local {local_i})")
+        tg_print('worker', f'{worker_id} started  core={core_id}  local={local_i}', level='state')
 
         while self._active:
             try:
@@ -502,17 +512,17 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f"[{worker_id}] Error: {e}")
+                tg_print('worker', f'{worker_id} loop error: {e}', level='error')
                 await asyncio.sleep(0.05)
 
-        print(f"[{worker_id}] Stopped")
+        tg_print('worker', f'{worker_id} stopped', level='state')
 
     async def stop(self):
         """Cancel worker tasks, stop mailbox consumption, and await shutdown."""
         if not self._active:
             return
 
-        print("[CORE_PINNED_QUEUE] Stopping all workers...")
+        tg_print('worker', 'Stopping all workers...')
 
         self._active = False
 
@@ -525,7 +535,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
 
         self._execution_tasks = []
 
-        print("[CORE_PINNED_QUEUE] All workers stopped")
+        tg_print('worker', 'All workers stopped')
 
     def get_stats(self) -> dict:
         """Return queue configuration, counters, and per-core position state."""

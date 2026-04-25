@@ -25,6 +25,7 @@ sys.path.insert(0, current_dir)
 from .token_system import global_token_pool, TaskToken, TokenMetadata, TokenState
 from .code_inspector import CodeInspector, ComplexityLevel
 from .allocation_optimizer import AllocationOptimizer
+from .tg_print import tg_print
 
 
 @dataclass
@@ -107,9 +108,9 @@ class OverflowGuard:
         self.total_retries_succeeded = 0
         self.total_retries_exhausted = 0
 
-        print("[OVERFLOW_GUARD] Initialized")
-        print(f"  Base budget: {base_budget_mb} MB")
-        print(f"  Retry policies loaded for all complexity levels")
+        tg_print('overflow', 'Initialized')
+        tg_print('overflow', f'Base budget: {base_budget_mb} MB')
+        tg_print('overflow', 'Retry policies loaded for all complexity levels')
 
     def inspect_token(self, token: TaskToken) -> Dict[str, Any]:
         """
@@ -133,7 +134,7 @@ class OverflowGuard:
         try:
             metrics = CodeInspector.analyze(func)
         except Exception as e:
-            print(f"[GUARD] Failed to inspect {token.token_id}: {e}")
+            tg_print('overflow', f'Failed to inspect {token.token_id}: {e}', level='error')
             # Return safe defaults
             return {
                 'metrics': None,
@@ -150,11 +151,12 @@ class OverflowGuard:
         # Get allocation recommendation
         allocation = CodeInspector.predict_initial_allocation(metrics, self.base_budget_mb)
 
-        print(f"[GUARD] Inspected {token.token_id}")
-        print(f"  Operation: {operation_name}")
-        print(f"  Complexity: {metrics.complexity_level.name} (score: {metrics.complexity_score:.1f})")
-        print(f"  Allocation: {allocation['memory_mb']} MB")
-        print(f"  Confidence: {allocation['confidence']}%")
+        tg_print('overflow', f'Inspected {token.token_id}', level='debug')
+        tg_print('overflow', f'Operation: {operation_name}', level='debug')
+        tg_print('overflow', f'Complexity: {metrics.complexity_level.name} '
+                             f'(score: {metrics.complexity_score:.1f})', level='debug')
+        tg_print('overflow', f'Allocation: {allocation["memory_mb"]} MB', level='debug')
+        tg_print('overflow', f'Confidence: {allocation["confidence"]}%', level='debug')
 
         return {
             'metrics': metrics,
@@ -191,8 +193,8 @@ class OverflowGuard:
         # File writes, database ops, network requests should NOT retry
         # because the same args → same target → corruption/conflicts
         if token_tags and token_tags.get('allow_retries') == 'false':
-            print(f"[GUARD] Skipping retry for I/O operation: {operation_type}")
-            print(f"  Reason: I/O operations with same args risk data corruption")
+            tg_print('overflow', f'Skipping retry for I/O operation: {operation_type}', level='warn')
+            tg_print('overflow', 'Reason: I/O operations with same args risk data corruption', level='warn')
             return False  # ← BLOCK RETRY
 
         # Check the duration threshold
@@ -224,7 +226,7 @@ class OverflowGuard:
                 backup = self.BACKUP_TOKENS[token_id]
 
                 if not backup.can_retry():
-                    print(f"[GUARD] Retries exhausted for {token_id}")
+                    tg_print('overflow', f'Retries exhausted for {token_id}', level='warn')
                     self.total_retries_exhausted += 1
                     return None
 
@@ -234,8 +236,8 @@ class OverflowGuard:
                 backup.current_retry_count += 1
                 backup.last_retry_at = time.time()
 
-                print(f"[GUARD] Retry {backup.current_retry_count}/{backup.max_retries} for {token_id}")
-                print(f"  Bumping allocation: {new_allocation} MB (+{backup.bump_percent * 100}%)")
+                tg_print('overflow', f'Retry {backup.current_retry_count}/{backup.max_retries} for {token_id}')
+                tg_print('overflow', f'Bumping allocation: {new_allocation} MB (+{backup.bump_percent * 100}%)')
 
             else:
                 # First failure - create backup entry
@@ -277,10 +279,11 @@ class OverflowGuard:
 
                 self.BACKUP_TOKENS[token_id] = backup
 
-                print(f"[GUARD] Creating backup for {token_id}")
-                print(f"  Complexity: {complexity_level.name}")
-                print(f"  Policy: {policy.max_retries} retries @ {policy.allocation_bump_percent * 100}% bumps")
-                print(f"  Initial retry allocation: {backup.current_allocation_mb} MB")
+                tg_print('overflow', f'Creating backup for {token_id}')
+                tg_print('overflow', f'Complexity: {complexity_level.name}', level='debug')
+                tg_print('overflow',f'Policy: {policy.max_retries} '
+                                    f'retries @ {policy.allocation_bump_percent * 100}% bumps', level='debug')
+                tg_print('overflow', f'Initial retry allocation: {backup.current_allocation_mb} MB', level='debug')
 
             # Create the retry token
             retry_metadata = TokenMetadata(
@@ -309,7 +312,8 @@ class OverflowGuard:
 
             return retry_token
 
-    def _inject_retry_to_pool(self, retry_token: TaskToken):
+    @staticmethod
+    def _inject_retry_to_pool(retry_token: TaskToken):
         """Inject a retry token directly into the global token pool and async queue."""
         # Add to pool's token dict
         with global_token_pool._lock:
@@ -326,13 +330,13 @@ class OverflowGuard:
         # Transition to waiting state
         retry_token.transition_state(TokenState.WAITING)
 
-        print(f"[GUARD] Injected retry token {retry_token.token_id} directly to pool")
+        tg_print('overflow', f'Injected retry token {retry_token.token_id} directly to pool', level='state')
 
     def record_success(self, token_id: str, execution_duration: float):
         """Record a successful retry outcome in aggregate statistics."""
         with self._backup_lock:
             if token_id in self.BACKUP_TOKENS:
-                print(f"[GUARD] Retry succeeded for {token_id}!")
+                tg_print('overflow', f'Retry succeeded for {token_id}!')
                 self.total_retries_succeeded += 1
                 # Keep the backup entry for stats, mark as succeeded
 
@@ -352,6 +356,7 @@ class OverflowGuard:
                 'optimizer_stats': self.optimizer.get_all_stats()
             }
 
+    # TODO: Display statuses for backup tokens inside the WebSocket dashboard.
     def print_backup_status(self):
         """Print readable backup token status."""
         with self._backup_lock:

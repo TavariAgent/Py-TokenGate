@@ -2,14 +2,6 @@
 # operations_coordinator.py
 """
 Runtime orchestration for token-managed execution.
-
-This module defines the main coordinator responsible for wiring the token pool,
-admission gate, worker queue, convergence engine, and supporting safety/metrics
-components into one running execution system.
-
-The coordinator owns the background asyncio event loop used for admission and
-control-plane tasks. Worker execution is delegated to downstream execution
-components started from that loop.
 """
 
 import asyncio
@@ -30,6 +22,7 @@ from .prometheus_convergence import PrometheusConvergenceEngine
 from .threading_metrics import get_metrics
 from .token_system import global_token_pool
 from .topology_detector import TopologyDetector
+from .tg_print import tg_print, TGPrint
 
 
 @dataclass
@@ -52,6 +45,7 @@ class ExecutionRecord:
     def to_dict(self) -> dict:
         """Return a plain dictionary representation of the execution record."""
         return asdict(self)
+
 
 class WorkerPoolInterface:
     """Minimal worker-pool adapter exposed to the convergence engine.
@@ -78,63 +72,34 @@ class WorkerPoolInterface:
             'workers_per_core': self.workers_per_core
         }
 
+
 class OperationsCoordinator:
-    """Owns runtime startup, component wiring, and orderly shutdown.
-
-    The coordinator assembles the token pool, admission gate, worker queue,
-    convergence engine, safety components, and metrics into a single running
-    execution system.
-
-    It owns the background asyncio event loop used for admission and control
-    tasks, and it starts the downstream worker/execution pipeline from that loop.
-    """
+    """Owns runtime startup, component wiring, and orderly shutdown."""
     def __init__(
             self,
-            workers_per_core: int = 4, # <- !!! THIS IS NOT ADJUSTABLE !!! (You can either disable convergence or leave that alone!)
-            enable_convergence: bool = True,
-            convergence_verbose: bool = False, # <- !!! THIS IS NOT COMPATIBLE WITH REPL !!!
-            base_memory_budget_mb: int = 65,
-            num_executors: int = 4,
-            auto_block_dangerous: bool = False,
+            workers_per_core:       int  = 4,
+            enable_convergence:     bool = True,
+            convergence_verbose:    bool = False,
+            base_memory_budget_mb:  int  = 65,
+            num_executors:          int  = 4,
+            auto_block_dangerous:   bool = False,
     ):
-        """Initialize the coordinator and construct all runtime components.
+        tg_print('coordinator', '=' * 60)
+        tg_print('coordinator', 'Initializing...')
+        tg_print('coordinator', '=' * 60)
 
-        Args:
-            workers_per_core: Target mailbox workers to create per detected
-                physical core.
-            enable_convergence: Whether to start adaptive convergence monitoring.
-            convergence_verbose: Whether convergence decisions should be printed.
-            base_memory_budget_mb: Base memory budget used by the overflow guard.
-            num_executors: Number of executor-driving async tasks to start in the
-                worker queue layer.
-            auto_block_dangerous: Whether Guard House should automatically block
-                dangerous methods when enough reputation data exists.
-
-        Notes:
-            Component construction happens here, but the runtime is not started
-            until ``start()`` is called.
-        """
-        print("=" * 70)
-        print("Operations Coordinator - Initializing...")
-        print("=" * 70)
-        print()
-
-        # Configuration
         self.workers_per_core = workers_per_core
         self.enable_convergence = enable_convergence
         self.num_executors = num_executors
         self.quarantine_mgr = None
         self.spike_detector = None
 
-        # Detect topology
-        print("Detecting CPU topology...")
+        tg_print('coordinator', 'Detecting CPU topology...')
         detector = TopologyDetector()
         self.topology = detector.detect()
         detector.print_topology(self.topology)
-        print()
 
-        # Create foundation components
-        print("Creating foundation components...")
+        tg_print('coordinator', 'Creating foundation components...')
 
         # Overflow guard (memory protection)
         self.overflow_guard = OverflowGuard(base_budget_mb=base_memory_budget_mb)
@@ -151,13 +116,11 @@ class OperationsCoordinator:
         self.recent_executions = deque(maxlen=95) # ← Tune for micro performance gains
         self._executions_lock = threading.RLock()  # ← RLock for safety!
 
-        print("Overflow guard initialized")
-        print("Guard House initialized")
-        print("Core affinity policy created")
-        print()
+        tg_print('coordinator', 'Overflow guard initialized')
+        tg_print('coordinator', 'Guard House initialized')
+        tg_print('coordinator', 'Core affinity policy created')
 
-        # Create execution pipeline
-        print("Building execution pipeline...")
+        tg_print('coordinator', 'Building execution pipeline...')
 
         # Worker queue - does routing AND execution
         from .core_pinned_staggered_queue import CorePinnedStaggeredQueue
@@ -177,14 +140,13 @@ class OperationsCoordinator:
             worker_pool=self.worker_pool,
         )
 
-        print("Worker queue created")
-        print("Admission gate configured")
-        print()
+        tg_print('coordinator', 'Worker queue created')
+        tg_print('coordinator', 'Admission gate configured')
 
         # Convergence engine (optional)
         self.convergence: Optional[PrometheusConvergenceEngine] = None
         if enable_convergence:
-            print("Configuring convergence engine...")
+            tg_print('coordinator', 'Configuring convergence engine...')
             self.convergence = PrometheusConvergenceEngine(
                 topology=self.topology,
                 queue_wait_threshold=1.0,
@@ -193,8 +155,7 @@ class OperationsCoordinator:
                 queue_depth_factor=2,
                 verbose=convergence_verbose
             )
-            print("Prometheus convergence enabled")
-            print()
+            tg_print('coordinator', 'Prometheus convergence enabled')
 
         # State
         self._active = False
@@ -202,13 +163,12 @@ class OperationsCoordinator:
         self._event_loop: Optional[asyncio.AbstractEventLoop] = None
         self._loop_thread: Optional[threading.Thread] = None
 
-        print("Operations Coordinator ready!")
-        print(f"  Cores: {self.topology.physical_cores}")
-        print(f"  Workers per core: {workers_per_core}")
-        print(f"  Total workers: {self.topology.physical_cores * workers_per_core}")
-        print(f"  Convergence: {'ENABLED' if enable_convergence else 'disabled'}")
-        print("=" * 70)
-        print()
+        tg_print('coordinator', 'Ready!')
+        tg_print('coordinator', f'  Cores:            {self.topology.physical_cores}')
+        tg_print('coordinator', f'  Workers per core: {workers_per_core}')
+        tg_print('coordinator', f'  Total workers:    {self.topology.physical_cores * workers_per_core}')
+        tg_print('coordinator', f'  Convergence:      {"ENABLED" if enable_convergence else "disabled"}')
+        tg_print('coordinator', '=' * 60)
 
     def print_guard_house_dashboard(self):
         """Print the current Guard House heatmap dashboard."""
@@ -243,20 +203,16 @@ class OperationsCoordinator:
             The path written, as a string.
         """
         if filepath is None:
-            timestamp = int(time.time())
-            filepath = Path(f'execution_history_{timestamp}.json')
-
+            filepath = Path(f'execution_history_{int(time.time())}.json')
         with self._executions_lock:
             data = {
                 'timestamp': time.time(),
                 'total_executions': len(self.recent_executions),
                 'executions': [rec.to_dict() for rec in self.recent_executions]
             }
-
         with open(filepath, 'w') as f:
             json.dump(data, f, indent=2)
-
-        print(f"[COORDINATOR] Execution history dumped to: {filepath}")
+        tg_print('coordinator', f'Execution history dumped to: {filepath}')
         return str(filepath)
 
     def start(self):
@@ -274,12 +230,10 @@ class OperationsCoordinator:
         startup sequence has been dispatched.
         """
         if self._active:
-            print("Operations Coordinator already running!")
+            tg_print('coordinator', 'Already running!', level='warn')
             return
 
-        print("Starting Operations Coordinator...")
-        print()
-
+        tg_print('coordinator', 'Starting...')
         self._active = True
 
         global_token_pool._guard_house = self.guard_house
@@ -298,16 +252,14 @@ class OperationsCoordinator:
         while self._event_loop is None:
             time.sleep(0.01)
 
-        print("Event loop started")
-        print("Worker queue started")
-        print("Admission gate started")
+        tg_print('coordinator', 'Event loop started')
+        tg_print('coordinator', 'Worker queue started')
+        tg_print('coordinator', 'Admission gate started')
 
         if self.convergence:
-            print("Convergence monitoring started")
+            tg_print('coordinator', 'Convergence monitoring started')
 
-        print()
-        print("Operations Coordinator started successfully!")
-        print()
+        tg_print('coordinator', 'Started successfully!')
 
     def stop(self):
         """Stop the coordinator and shut down runtime components in order.
@@ -326,24 +278,18 @@ class OperationsCoordinator:
         if not self._active:
             return
 
-        print()
-        print("Stopping Operations Coordinator...")
-        print()
-
+        tg_print('coordinator', 'Stopping...')
         self._active = False
 
 
         # Stop convergence first
         if self._convergence_task:
             asyncio.run_coroutine_threadsafe(
-                self._stop_convergence(),
-                self._event_loop
+                self._stop_convergence(), self._event_loop # Type: Ignore
             ).result(timeout=5.0)
 
-        # Stop gate and workers
         asyncio.run_coroutine_threadsafe(
-            self._stop_execution(),
-            self._event_loop
+            self._stop_execution(), self._event_loop # Type: Ignore
         ).result(timeout=5.0)
 
         # Stop event loop
@@ -352,10 +298,8 @@ class OperationsCoordinator:
         if self._loop_thread:
             self._loop_thread.join(timeout=5.0)
 
-        print("All components stopped")
-        print()
-        print("Operations shutdown complete!")
-        print()
+        tg_print('coordinator', 'All components stopped')
+        tg_print('coordinator', 'Shutdown complete')
 
     def _run_event_loop(self):
         """Own and run the coordinator's background asyncio event loop.
@@ -380,7 +324,6 @@ class OperationsCoordinator:
         if self.convergence:
             self._convergence_task = self._event_loop.create_task(self._convergence_loop())
 
-        # Run forever
         try:
             self._event_loop.run_forever()
         finally:
@@ -391,21 +334,23 @@ class OperationsCoordinator:
         while self._active:
             try:
                 await asyncio.sleep(5.0)
-
-                # Analyze cores
                 core_pressures = self.convergence.analyze_cores(self.worker_pool)
-
-                # Get adjustments
                 adjustments = self.convergence.recommend_adjustments(core_pressures)
 
                 if adjustments:
-                    if self.convergence.verbose:
-                        print(f"[CONVERGENCE] Applying {len(adjustments)} pattern adjustments...")
+                    tg_print(
+                        'convergence',
+                        f'Applying {len(adjustments)} pattern adjustment(s)...',
+                    )
                     for core_id, new_pattern in adjustments.items():
+                        tg_print(
+                            'convergence',
+                            f'Core {core_id} -> pattern {new_pattern}',
+                            level='dispatch',
+                        )
                         self.convergence.apply_pattern(core_id, new_pattern, self.worker_pool)
-
             except Exception as e:
-                print(f"[CONVERGENCE] Error: {e}")
+                tg_print('convergence', f'Error: {e}', level='error')
                 await asyncio.sleep(5.0)
 
     async def _stop_convergence(self):
@@ -447,35 +392,43 @@ class OperationsCoordinator:
         """Print the current core-affinity distribution report."""
         self.affinity_queue.print_affinity_report()
 
-    def kill_token(self, token_id: str, reason: str = "admin_override") -> bool:
+    @staticmethod
+    def kill_token(token_id: str, reason: str = "admin_override") -> bool:
         """Kill a token by id via the global token pool."""
         return global_token_pool.kill_token(token_id, reason)
 
-    def kill_all_by_operation(self, operation_type: str, reason: str = "admin_bulk_kill") -> int:
+    @staticmethod
+    def kill_all_by_operation(operation_type: str, reason: str = "admin_bulk_kill") -> int:
         """Kill all tokens matching an operation type."""
         return global_token_pool.kill_all_by_operation(operation_type, reason)
 
-    def pause_admission(self):
+    @staticmethod
+    def pause_admission():
         """Pause token admission while continuing to accept submissions."""
         global_token_pool.pause()
 
-    def resume_admission(self):
+    @staticmethod
+    def resume_admission():
         """Resume token admission from the global token pool."""
         global_token_pool.resume()
 
-    def drain_pool(self) -> int:
+    @staticmethod
+    def drain_pool() -> int:
         """Kill all tokens still waiting for admission and return the count."""
         return global_token_pool.drain()
 
-    def drain_operation(self, operation_type: str, reason: str = "admin_per-token_drain") -> int:
+    @staticmethod
+    def drain_operation(operation_type: str, reason: str = "admin_per-token_drain") -> int:
         """Drain a specific token"""
         return global_token_pool.drain(operation_type, reason)
 
-    def pause_operation(self, operation_type: str, reason: str = "admin_per-token_pause") -> int:
+    @staticmethod
+    def pause_operation(operation_type: str, reason: str = "admin_per-token_pause") -> int:
         """Pause a specific token"""
         return global_token_pool.pause(operation_type, reason)
 
-    def resume_operation(self, operation_type: str, reason: str = "admin_per-token_resume") -> int:
+    @staticmethod
+    def resume_operation(operation_type: str, reason: str = "admin_per-token_resume") -> int:
         """Resume a specific token"""
         return global_token_pool.resume(operation_type, reason)
 
@@ -501,7 +454,6 @@ def get_global_coordinator() -> OperationsCoordinator | None:
             if _global_coordinator is None:
                 _global_coordinator = OperationsCoordinator()
                 _global_coordinator.start()
-
     return _global_coordinator
 
 
@@ -512,6 +464,5 @@ def set_global_coordinator(coordinator: OperationsCoordinator):
     manually with custom configuration.
     """
     global _global_coordinator
-
     with _coordinator_lock:
         _global_coordinator = coordinator

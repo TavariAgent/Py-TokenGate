@@ -15,11 +15,13 @@ from typing import Dict, Optional, List, Callable
 from dataclasses import dataclass
 from enum import Enum
 from collections import defaultdict
+from .tg_print import tg_print
 
 
 class MethodBlockedException(Exception):
     """Raised when a method is auto-blocked due to a high failure rate."""
     pass
+
 
 class MethodHealth(Enum):
     """Health status classification for methods."""
@@ -164,12 +166,12 @@ class GuardHouse:
         self.blocked_methods: set = set()
 
         mode = "Active Protection" if auto_block_dangerous else "Passive Monitoring"
-        print(f"[GUARD_HOUSE] {mode} initialized")
-        print("  Mode: Post-execution analysis")
+        tg_print('guard', f'{mode} initialized')
+        tg_print('guard', 'Mode: Post-execution analysis')
         if auto_block_dangerous:
-            print("  Auto-blocking: ENABLED (>90% failure rate)")
+            tg_print('guard', 'Auto-blocking: ENABLED (>90% failure rate)')
         else:
-            print("  Auto-blocking: DISABLED (observation only)")
+            tg_print('guard', 'Auto-blocking: DISABLED (observation only)')
 
     def record_execution_result(
             self,
@@ -242,9 +244,10 @@ class GuardHouse:
                 if failure_rate > 90.0 and rep.total_attempts >= 10:
                     if method_name not in self.blocked_methods:
                         self.blocked_methods.add(method_name)
-                        print(f"[GUARD_HOUSE] 🚫 AUTO-BLOCKED: {method_name}")
-                        print(f"  Failure rate: {failure_rate:.1f}% ({rep.failed_executions}/{rep.total_attempts})")
-                        print(f"  This method will be rejected on future calls")
+                        tg_print('guard',f'AUTO-BLOCKED: {method_name}', level='warn')
+                        tg_print('guard',f'Failure rate: {failure_rate:.1f}% '
+                                         f'({rep.failed_executions}/{rep.total_attempts})', level='warn')
+                        tg_print('guard','This method will be rejected on future calls', level='warn')
 
     def check_method_allowed(self, func: Callable):
         """
@@ -323,6 +326,7 @@ class GuardHouse:
                 'health_distribution': dict(health_counts)
             }
 
+    # TODO: Add a hook for the WebSocket dashboard to read the heatmap
     def print_heatmap(self):
         """Print the main method-health dashboard grouped by health class."""
         # Collect all data first (inside lock)
