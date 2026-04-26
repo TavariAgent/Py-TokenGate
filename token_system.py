@@ -109,6 +109,50 @@ class TaskToken(Generic[T]):
         self._kill_requested = threading.Event()
         self._killed_reason: Optional[str] = None
 
+    # ── __await__ ──────────────────────────────────
+    #
+    # This bridges TaskToken's internal concurrent.futures.Future to whatever asyncio
+    # event loop is currently running, making the token a native awaitable.
+    #
+    # Before (call-site):
+    #   result = token.get(timeout=30.0)         # blocks the calling thread
+    #
+    # After (call-site):
+    #   result = await token                     # suspends the coroutine, non-blocking
+    #   results = await asyncio.gather(*tokens)  # gather a whole batch at once
+    #
+    # ─────────────────────────────────────────────────────────────────────────────
+
+    def __await__(self):
+        """Make TaskToken directly awaitable from any asyncio context.
+
+        Wraps the internal concurrent.futures.Future with asyncio.wrap_future(),
+        which ties it to the currently running event loop. The coroutine suspends
+        (non-blocking) until the token resolves, fails, or is killed.
+
+        Usage::
+
+            result = await token
+            results = await asyncio.gather(*tokens)
+
+        Note: the decorated function is still synchronous and runs on a worker
+        thread. __await__ only affects how the *caller* waits for the result.
+        """
+        return asyncio.wrap_future(self._result_future).__await__()
+
+    # ── WHY THIS WORKS ────────────────────────────────────────────────────────────
+    #
+    # concurrent.futures.Future (what _result_future is) is thread-safe but not
+    # natively awaitable. asyncio.wrap_future() promotes it to an asyncio.Future
+    # that lives on the running loop. When the worker thread calls set_result() or
+    # set_exception() on the cf Future, the wrapped asyncio Future resolves on the
+    # loop — waking up any coroutine awaiting it.
+    #
+    # The coordinator's background event loop and the caller's event loop are
+    # separate. That's fine: the bridge is through the thread-safe cf Future,
+    # not through shared loop state.
+    # ─────────────────────────────────────────────────────────────────────────────
+
     def transition_state(self, new_state: TokenState) -> bool:
         """Attempt a validated lifecycle transition with tg_print visibility."""
         from .tg_print import tg_print   # local import avoids circular at module level
