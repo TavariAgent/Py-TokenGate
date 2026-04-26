@@ -1,7 +1,7 @@
 # TokenGate
 
-Welcome to the TokenGate repository.
-
+Welcome to the TokenGate repository.   
+(NOTE: Some documents are slightly out of date - see release notes on GitHub for fuller updates.)
 ---
 
 ### What it is:
@@ -89,12 +89,11 @@ if __name__ == "__main__":
 
 ## Project status
 
-TokenGate is an active proof of concept.
+TokenGate is an active proof of concept and beta.
 
 Current focus:
-- Refine the core concurrency model
+- Update DOCS to reflect recent changes and clarify usage
 - Improve system operability and confirm WebSocket behavior
-- Test the decorator/coordinator workflow
 - Gather feedback on API clarity and usability
 
-This is a base architecture, not a finished product.
+This is a beta system, it's still improving, if there's any issues, don't hesitate to report them on GitHub.
