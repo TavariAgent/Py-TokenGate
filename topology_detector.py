@@ -53,8 +53,8 @@ class TopologyDetector:
         Returns complete topology information including
         physical/logical core counts and mappings.
         """
-        physical = psutil.cpu_count(logical=False)
-        logical = psutil.cpu_count(logical=True)
+        physical = psutil.cpu_count(logical=False) or 1
+        logical = psutil.cpu_count(logical=True) or 1
 
         # Detect SMT
         smt_enabled = logical > physical

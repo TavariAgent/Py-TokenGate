@@ -333,7 +333,8 @@ class QuarantineManager:
 
             return quarantined
 
-    def _summarize_args(self, args: tuple[Any, ...],) -> str:
+    @staticmethod
+    def _summarize_args(args: tuple[Any, ...],) -> str:
         """Create a brief summary of args."""
         if not args:
             return "No args"
@@ -352,7 +353,8 @@ class QuarantineManager:
 
         return ", ".join(summary_parts)
 
-    def _serialize_args(self, args: tuple[Any, ...],) -> str:
+    @staticmethod
+    def _serialize_args(args: tuple[Any, ...],) -> str:
         """Serialize args to string (with size limits)."""
         try:
             # Try JSON serialization
@@ -366,7 +368,8 @@ class QuarantineManager:
         except:
             return f"<Non-serializable: {type(args)}>"
 
-    def _summarize_kwargs(self, kwargs: dict) -> str:
+    @staticmethod
+    def _summarize_kwargs(kwargs: dict) -> str:
         """Create brief summary of kwargs."""
         if not kwargs:
             return "No kwargs"
@@ -382,7 +385,8 @@ class QuarantineManager:
 
         return ", ".join(summary_parts)
 
-    def _serialize_kwargs(self, kwargs: dict) -> str:
+    @staticmethod
+    def _serialize_kwargs(kwargs: dict) -> str:
         """Serialize kwargs to string."""
         try:
             serialized = json.dumps(kwargs)

@@ -58,7 +58,6 @@ class WorkerPoolInterface:
         self.num_cores = worker_queue.num_cores
         self.workers_per_core = worker_queue.workers_per_core
         self.num_workers = worker_queue.total_workers
-        self.set_pattern = worker_queue.set_core_pattern
 
     def set_core_pattern(self, core_id: int, pattern: int):
         """Update the active worker pattern for a core via the worker queue."""
@@ -79,7 +78,6 @@ class OperationsCoordinator:
             self,
             workers_per_core:       int  = 4,
             enable_convergence:     bool = True,
-            convergence_verbose:    bool = False,
             base_memory_budget_mb:  int  = 65,
             num_executors:          int  = 4,
             auto_block_dangerous:   bool = False,
@@ -152,8 +150,7 @@ class OperationsCoordinator:
                 queue_wait_threshold=1.0,
                 utilization_high=80.0,
                 utilization_low=40.0,
-                queue_depth_factor=2,
-                verbose=convergence_verbose
+                queue_depth_factor=2
             )
             tg_print('coordinator', 'Prometheus convergence enabled')
 

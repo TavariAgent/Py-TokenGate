@@ -58,7 +58,6 @@ class PrometheusConvergenceEngine:
             utilization_high: float = 85.0,  # >80% = saturated
             utilization_low: float = 35.0,  # <40% = underutilized
             queue_depth_factor: int = 5,  # queue > workers*5 = overloaded
-            verbose: bool = True # Print [CONVERGENCE] messages
     ):
         """
         Initialize the convergence engine and default per-core patterns.
@@ -69,15 +68,12 @@ class PrometheusConvergenceEngine:
             utilization_high: Utilization threshold indicating saturation.
             utilization_low: Utilization threshold indicating underutilization.
             queue_depth_factor: Queue depth multiplier used in overload checks.
-            verbose: Whether convergence decisions should be printed.
         """
         self.topology = topology
         self.queue_wait_threshold = queue_wait_threshold
         self.utilization_high = utilization_high
         self.utilization_low = utilization_low
         self.queue_depth_factor = queue_depth_factor
-        self.verbose = verbose
-
         self.metrics = get_metrics()
 
         # Track current patterns
@@ -176,27 +172,22 @@ class PrometheusConvergenceEngine:
 
         # RULE 1: High queue wait time = OVERLOADED
         if queue_wait_p95 > self.queue_wait_threshold:
-            if self.verbose:
-                if self.verbose:
-                    tg_print('convergence', f'Core {core_id}: queue wait p95={queue_wait_p95:.2f}s > threshold {self.queue_wait_threshold}s  -> overloaded')
+            tg_print('convergence', f'Core {core_id}: queue wait p95={queue_wait_p95:.2f}s > threshold {self.queue_wait_threshold}s  -> overloaded')
             return 'overloaded', WorkerPattern.HEAVY
 
         # RULE 2: Deep queue = OVERLOADED
         if queue_depth > workers_per_core * self.queue_depth_factor:
-            if self.verbose:
-                tg_print('convergence', f'Core {core_id}: queue depth={queue_depth} > {workers_per_core * self.queue_depth_factor}  -> overloaded')
+            tg_print('convergence', f'Core {core_id}: queue depth={queue_depth} > {workers_per_core * self.queue_depth_factor}  -> overloaded')
             return 'overloaded', WorkerPattern.HEAVY
 
         # RULE 3: High utilization + any queue = OVERLOADED
         if utilization > self.utilization_high and queue_depth > 0:
-            if self.verbose:
-                tg_print('convergence', f'Core {core_id}: utilization={utilization:.1f}% > {self.utilization_high}% with queue  -> overloaded')
+            tg_print('convergence', f'Core {core_id}: utilization={utilization:.1f}% > {self.utilization_high}% with queue  -> overloaded')
             return 'overloaded', WorkerPattern.HEAVY
 
         # RULE 4: Low utilization = UNDERUTILIZED
         if utilization < self.utilization_low:
-            if self.verbose:
-                tg_print('convergence', f'Core {core_id}: utilization={utilization:.1f}% < {self.utilization_low}%  -> underutilized')
+            tg_print('convergence', f'Core {core_id}: utilization={utilization:.1f}% < {self.utilization_low}%  -> underutilized')
             return 'underutilized', WorkerPattern.LIGHT
 
         # RULE 5: Everything else = BALANCED
@@ -216,11 +207,10 @@ class PrometheusConvergenceEngine:
             if current != recommended:
                 adjustments[pressure.core_id] = recommended
 
-                # Log the reason (ALL prints wrapped!)
-                if self.verbose:
-                    tg_print('convergence',f'Core {pressure.core_id}: {current.name} -> {recommended.name}  reason={pressure.pressure_level}')
-                    tg_print('convergence', f'depth={pressure.queue_depth}  util={pressure.worker_utilization:.1f}%' + (
-                                 f'wait_p95={pressure.queue_wait_p95:.2f}s' if pressure.queue_wait_p95 else ''), level='debug')
+                # Log the reason for the change and current pressure signals
+                tg_print('convergence',f'Core {pressure.core_id}: {current.name} -> {recommended.name}  reason={pressure.pressure_level}')
+                tg_print('convergence', f'depth={pressure.queue_depth}  util={pressure.worker_utilization:.1f}%' + (
+                             f'wait_p95={pressure.queue_wait_p95:.2f}s' if pressure.queue_wait_p95 else ''), level='debug')
 
         return adjustments
 
@@ -242,14 +232,12 @@ class PrometheusConvergenceEngine:
         self.metrics.update_pattern(core_id, pattern.value)
 
         if old_pattern != pattern:
-            if worker_pool and hasattr(worker_pool, 'set_core_pattern'):
+            if worker_pool and hasattr(worker_pool, 'set_pattern'):
                 try:
                     worker_pool.set_pattern(core_id, pattern.value)
-                    if self.verbose:
-                        tg_print('convergence', f'Core {core_id}: pattern applied to worker pool', level='dispatch')
+                    tg_print('convergence', f'Core {core_id}: pattern applied to worker pool', level='dispatch')
                 except Exception as e:
-                    if self.verbose:
-                        tg_print('convergence', f'Core {core_id}: could not apply pattern to pool: {e}', level='warn')
+                    tg_print('convergence', f'Core {core_id}: could not apply pattern to pool: {e}', level='warn')
 
             self.metrics.record_convergence_change(
                 core_id,
@@ -263,9 +251,7 @@ class PrometheusConvergenceEngine:
                 'from_pattern': old_pattern.name,
                 'to_pattern': pattern.name
             })
-
-            if self.verbose:
-                tg_print('convergence', f'Core {core_id}: {old_pattern.name} ({old_pattern.value} workers) '
+            tg_print('convergence', f'Core {core_id}: {old_pattern.name} ({old_pattern.value} workers) '
                                         f'-> {pattern.name} ({pattern.value} workers)', level='state')
 
     def get_convergence_status(self) -> dict:

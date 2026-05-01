@@ -315,21 +315,9 @@ class OverflowGuard:
     @staticmethod
     def _inject_retry_to_pool(retry_token: TaskToken):
         """Inject a retry token directly into the global token pool and async queue."""
+
         # Add to pool's token dict
-        with global_token_pool._lock:
-            global_token_pool.tokens[retry_token.token_id] = retry_token
-
-        # Queue for admission processing (it will be admitted immediately)
-        if global_token_pool._event_loop:
-            import asyncio
-            asyncio.run_coroutine_threadsafe(
-                global_token_pool._token_queue.put(retry_token),
-                global_token_pool._event_loop
-            )
-
-        # Transition to waiting state
-        retry_token.transition_state(TokenState.WAITING)
-
+        global_token_pool.register_retry_token(retry_token)
         tg_print('overflow', f'Injected retry token {retry_token.token_id} directly to pool', level='state')
 
     def record_success(self, token_id: str, execution_duration: float):

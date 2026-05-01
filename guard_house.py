@@ -232,7 +232,7 @@ class GuardHouse:
                 rep.total_complexity_score += complexity_score
                 rep.avg_complexity_score = rep.total_complexity_score / rep.total_attempts
 
-            # Update health status
+            # TODO: Update health status
             old_health = rep.health_status
             new_health = rep.update_health_status()
 

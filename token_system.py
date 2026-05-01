@@ -23,6 +23,8 @@ from enum import Enum
 from functools import wraps
 from typing import Callable, Any, Optional, Dict, ParamSpec, Generic, TypeVar
 
+from .tg_print import tg_print
+
 _token_id_counter = itertools.count()
 
 
@@ -155,7 +157,6 @@ class TaskToken(Generic[T]):
 
     def transition_state(self, new_state: TokenState) -> bool:
         """Attempt a validated lifecycle transition with tg_print visibility."""
-        from .tg_print import tg_print   # local import avoids circular at module level
         cb = None
         old_state = None
         with self._state_lock:
@@ -201,7 +202,6 @@ class TaskToken(Generic[T]):
 
     def kill(self, reason: str = "admin_override"):
         """Kills the active token."""
-        from .tg_print import tg_print
         self._kill_requested.set()
         self._killed_reason = reason
 
@@ -227,7 +227,6 @@ class TaskToken(Generic[T]):
 
     def set_error(self, error: Exception):
         """Store an execution error and transition state."""
-        from .tg_print import tg_print
         self._error = error
         self.transition_state(TokenState.FAILED)
         self._result_future.set_exception(error)
@@ -288,6 +287,18 @@ class TokenPool:
         self._paused_operations: set[str] = set()
         self._paused_holding: Dict[str, list[TaskToken]] = {}
 
+    def register_retry_token(self, token: TaskToken):
+        """Register a retry token directly, bypassing the admission gate."""
+        with self._lock:
+            self.tokens[token.token_id] = token
+
+        if self._event_loop:
+            asyncio.run_coroutine_threadsafe(
+                self._token_queue.put(token), self._event_loop
+            )
+
+        token.transition_state(TokenState.WAITING)
+
     def create_token(
             self,
             func: Callable[[P], R],
@@ -296,8 +307,6 @@ class TokenPool:
             operation_type: Optional[str] = None,
             tags: Dict[str, Any] | None = None
     ) -> "TaskToken[R]":
-        from .tg_print import tg_print
-
         self.total_created += 1
         token_id = f"{operation_type}_{time.time_ns()}_{next(_token_id_counter)}"
 
@@ -387,7 +396,6 @@ class TokenPool:
 
     def kill_all_by_operation(self, operation_type: str, reason: str = "admin_bulk_kill"):
         """Kill all tokens with the given operation type."""
-        from .tg_print import tg_print
         tokens = self.get_tokens_by_operation(operation_type)
         killed = 0
         for token in tokens:
@@ -399,7 +407,6 @@ class TokenPool:
 
     def pause(self, operation_type: str = None, reason: str = "admin_pause"):
         """Pause token or pool."""
-        from .tg_print import tg_print
         if operation_type:
             with self._lock:
                 self._paused_operations.add(operation_type)
@@ -410,7 +417,6 @@ class TokenPool:
 
     def resume(self, operation_type: str = None, reason: str = "admin_resume"):
         """Resume token or pool."""
-        from .tg_print import tg_print
         if operation_type:
             tokens_to_requeue = []
             with self._lock:
@@ -437,7 +443,6 @@ class TokenPool:
 
     def drain(self, operation_type: str = None, reason: str = "admin_drain") -> int:
         """Drain the token or pool."""
-        from .tg_print import tg_print
         waiting = self.get_tokens_by_state(TokenState.WAITING)
         killed = 0
 
@@ -500,7 +505,6 @@ def task_token_guard(
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> "TaskToken[R]":
             from .code_inspector import CodeInspector
             from .spike_detector import TokenQuarantinedException
-            from .tg_print import tg_print
 
             if not hasattr(wrapper, "cached_metrics"):
                 wrapper.cached_metrics = CodeInspector.analyze(func)

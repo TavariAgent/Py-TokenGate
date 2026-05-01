@@ -12,7 +12,6 @@ performed by the pinned worker queue layer.
 """
 
 import threading
-import time
 from dataclasses import dataclass
 from enum import Enum
 from queue import Queue
@@ -261,83 +260,3 @@ class CoreAffinityQueue:
                 print(f"  Total:  {stats['total_tasks']} tasks")
 
         print("=" * 70)
-
-
-# ============================================================================
-# TESTING
-# ============================================================================
-
-if __name__ == '__main__':
-    from .topology_detector import TopologyDetector
-    from .token_system import TaskToken, TokenMetadata
-
-    print("=" * 70)
-    print("CORE AFFINITY QUEUE TEST")
-    print("=" * 70)
-    print()
-
-    # Detect topology
-    detector = TopologyDetector()
-    topology = detector.detect()
-
-    print(f"System: {topology.physical_cores} physical cores")
-    print()
-
-    # Create affinity queue
-    affinity_queue = CoreAffinityQueue(topology, workers_per_core=4)
-
-    print()
-    print("-" * 70)
-    print("TEST: Route tokens to cores")
-    print("-" * 70)
-    print()
-
-
-    # Create test tokens with different weights
-    def dummy_func():
-        return "test"
-
-
-    tokens = []
-
-    # Heavy tasks (should go to Core 1)
-    for i in range(3):
-        meta = TokenMetadata(
-            operation_type='compute_heavy',
-            created_at=time.time(),
-            tags={'weight': 'heavy'}
-        )
-        token = TaskToken(f'heavy_{i}', dummy_func, (), {}, meta)
-        tokens.append(('heavy', token))
-
-    # Medium tasks (should go to Core 2+)
-    for i in range(3):
-        meta = TokenMetadata(
-            operation_type='process_medium',
-            created_at=time.time(),
-            tags={'weight': 'medium'}
-        )
-        token = TaskToken(f'medium_{i}', dummy_func, (), {}, meta)
-        tokens.append(('medium', token))
-
-    # Light tasks (should go to Core 3+)
-    for i in range(3):
-        meta = TokenMetadata(
-            operation_type='io_light',
-            created_at=time.time(),
-            tags={'weight': 'light'}
-        )
-        token = TaskToken(f'light_{i}', dummy_func, (), {}, meta)
-        tokens.append(('light', token))
-
-    # Print report
-    affinity_queue.print_affinity_report()
-
-    print()
-    print("Stats:")
-    stats = affinity_queue.get_stats()
-    print(f"  Total routed: {stats['total_routed']}")
-    print(f"  Failures: {stats['routing_failures']}")
-
-    print()
-    print("Test complete!")

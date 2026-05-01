@@ -49,7 +49,6 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
                 retry, overflow, and Guard House callbacks.
         """
         super().__init__()
-        self.result_verbose = False
         self.coordinator = coordinator
         self.num_cores = num_cores
         self.workers_per_core = workers_per_core
@@ -76,8 +75,6 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         self.core_patterns: Dict[int, int] = {}
         for core_id in range(1, num_cores + 1):
             self.core_patterns[core_id] = workers_per_core  # Default: all workers active
-
-        self.coordinator = coordinator
 
         # Initialize stats
         self.total_executed = 0
@@ -108,15 +105,6 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
                            f'total={self.total_workers}')
         for core_id, workers in self.core_workers.items():
             tg_print('worker', f'Core {core_id}: workers {workers}', level='debug')
-
-    async def _mailbox_monitor_loop(self):
-        """Periodically sample mailbox depths for active workers on each core."""
-        while self._active:
-            await asyncio.sleep(1.0)
-            for core_id in range(1, self.num_cores + 1):
-                active = int(self.core_patterns.get(core_id, self.workers_per_core))
-                active = max(1, min(self.workers_per_core, active))
-                qs = [self.mailboxes[(core_id, i)].qsize() for i in range(active)]
 
     def _worker_index(self, core_id: int, local_i: int) -> int:
         """Return the flattened worker index for a core/local-worker pair."""
@@ -181,8 +169,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
             # Failed!
             token.set_error(e)
             self.total_failed += 1
-            if self.result_verbose:
-                tg_print('worker', f'{worker_id} failed {token.token_id}: {e}', level='error')
+            tg_print('worker', f'{worker_id} failed {token.token_id}: {e}', level='error')
 
         finally:
             execution_duration = time.time() - start_time
@@ -396,9 +383,8 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         # Increment counter
         self.core_position_counters[chosen_core] += 1
 
-        if self.result_verbose:
-            tg_print('worker', f'Routed {token.token_id}  weight={weight.value}  '
-                               f'pos={position}  core={chosen_core}  pattern={active_workers}', level='dispatch')
+        tg_print('worker', f'Routed {token.token_id}  weight={weight.value}  '
+                            f'pos={position}  core={chosen_core}  pattern={active_workers}', level='dispatch')
         return position
 
     async def put(self, token: "TaskToken"):

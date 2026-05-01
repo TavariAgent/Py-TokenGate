@@ -52,13 +52,13 @@ _DEFAULT_CHANNELS: dict[str, bool] = {
     'gate':        True,   # admission_gate.py
     'pool':        True,   # token_system.py  TokenPool
     'token':       True,   # token_system.py  TaskToken lifecycle
-    'coordinator': True,   # operations_coordinator.py
-    'convergence': True,   # prometheus_convergence.py
+    'coordinator': True,  # operations_coordinator.py
+    'convergence': False,  # prometheus_convergence.py
     'worker':      True,   # core_pinned_staggered_queue.py
     'storage':     True,   # storage_throttle.py
     'guard':       True,   # guard_house.py
     'overflow':    True,   # overflow_guard.py
-    'affinity':    False,  # core_affinity_queue.py  (verbose — off by default)
+    'affinity':    True,   # core_affinity_queue.py  (verbose — off by default)
 }
 
 # Per-channel debug flag — channels only show 'debug' level when True
