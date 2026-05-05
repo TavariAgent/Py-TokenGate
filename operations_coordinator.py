@@ -83,7 +83,7 @@ class OperationsCoordinator:
             auto_block_dangerous:   bool = False,
     ):
         tg_print('coordinator', '=' * 60)
-        tg_print('coordinator', 'Initializing...')
+        tg_print('coordinator','Initializing...')
         tg_print('coordinator', '=' * 60)
 
         self.workers_per_core = workers_per_core

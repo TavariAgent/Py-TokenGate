@@ -268,10 +268,10 @@ STORAGE_SPEEDS = {
 
 ### Assignment:
 
-> #### Token assignments are based on a series of queues (mailboxes) and worker affinity.
+> #### Token assignments are based on task characteristics, all system policies visible on startup.
 
 ```terminaloutput
-Detecting CPU topology...
+[COORD] Detecting CPU topology...
 CPU Topology Detected:
   Physical cores: 8
   Logical cores: 8
@@ -283,42 +283,75 @@ Recommended worker counts:
   Light workload (I/O bound): 32
   Medium workload (mixed): 24
   Heavy workload (CPU bound): 16
-
-Creating foundation components...
-[OVERFLOW_GUARD] Initialized
-  Base budget: 75 MB
-  Retry policies loaded for all complexity levels
-[GUARD_HOUSE] Passive Monitoring initialized
-  Mode: Post-execution analysis
-  Auto-blocking: DISABLED (observation only)
-[AFFINITY] Policy for 8 cores:
-  Heavy:  [1, 2, 3, 4, 5, 6, 7, 8] (preferred: 1)
-  Medium: [2, 3, 4, 5, 6, 7, 8] (preferred: 2)
-  Light:  [3, 4, 5, 6, 7, 8] (preferred: 3)
-Overflow guard initialized
-Guard House initialized
-Core affinity policy created
-
-Building execution pipeline...
-[CORE_PINNED_QUEUE] Initialized:
-  Cores: 8
-  Workers per core: 4
-  Total workers: 32
-  Core-worker mapping:
-    Core 1: Workers [0, 1, 2, 3]
-    Core 2: Workers [4, 5, 6, 7]
-    Core 3: Workers [8, 9, 10, 11]
-    Core 4: Workers [12, 13, 14, 15]
-    Core 5: Workers [16, 17, 18, 19]
-    Core 6: Workers [20, 21, 22, 23]
-    Core 7: Workers [24, 25, 26, 27]
-    Core 8: Workers [28, 29, 30, 31]
-
-Worker queue created
-Admission gate configured
-Configuring convergence engine...
-Prometheus convergence enabled
-Operations Coordinator ready!
+[COORD]      Creating foundation components...
+[OVERFLOW]   Initialized
+[OVERFLOW]   Base budget: 65 MB
+[OVERFLOW]   Retry policies loaded for all complexity levels
+[GUARD]      Passive Monitoring initialized
+[GUARD]      Mode: Post-execution analysis
+[GUARD]      Auto-blocking: DISABLED (observation only)
+[AFFINITY]   Policy built for 8 cores
+[AFFINITY]   Heavy:  [1, 2, 3, 4, 5, 6, 7, 8]  preferred=1
+[AFFINITY]   Medium: [2, 3, 4, 5, 6, 7, 8]  preferred=2
+[AFFINITY]   Light:  [3, 4, 5, 6, 7, 8]  preferred=3
+[COORD]      Overflow guard initialized
+[COORD]      Guard House initialized
+[COORD]      Core affinity policy created
+[COORD]      Building execution pipeline...
+[WORKER]     CorePinnedQueue initialized  cores=8  workers_per_core=4  total=32
+[COORD]      Worker queue created
+[COORD]      Admission gate configured
+[COORD]      Configuring convergence engine...
+[COORD]      Prometheus convergence enabled
+[COORD]      Ready!
+[COORD]        Cores:            8
+[COORD]        Workers per core: 4
+[COORD]        Total workers:    32
+[COORD]        Convergence:      ENABLED
+[COORD]      ============================================================
+[COORD]      Starting...
+[WORKER]     Starting 32 mailbox workers...
+[WORKER]     Started 32 workers across 8 cores
+[WORKER]       [->]  worker_0_core_1 started  core=1  local=0
+[WORKER]       [->]  worker_1_core_1 started  core=1  local=1
+[WORKER]       [->]  worker_2_core_1 started  core=1  local=2
+[WORKER]       [->]  worker_3_core_1 started  core=1  local=3
+[WORKER]       [->]  worker_4_core_2 started  core=2  local=0
+[WORKER]       [->]  worker_5_core_2 started  core=2  local=1
+[WORKER]       [->]  worker_6_core_2 started  core=2  local=2
+[WORKER]       [->]  worker_7_core_2 started  core=2  local=3
+[WORKER]       [->]  worker_8_core_3 started  core=3  local=0
+[WORKER]       [->]  worker_9_core_3 started  core=3  local=1
+[WORKER]       [->]  worker_10_core_3 started  core=3  local=2
+[WORKER]       [->]  worker_11_core_3 started  core=3  local=3
+[WORKER]       [->]  worker_12_core_4 started  core=4  local=0
+[WORKER]       [->]  worker_13_core_4 started  core=4  local=1
+[WORKER]       [->]  worker_14_core_4 started  core=4  local=2
+[WORKER]       [->]  worker_15_core_4 started  core=4  local=3
+[WORKER]       [->]  worker_16_core_5 started  core=5  local=0
+[WORKER]       [->]  worker_17_core_5 started  core=5  local=1
+[WORKER]       [->]  worker_18_core_5 started  core=5  local=2
+[WORKER]       [->]  worker_19_core_5 started  core=5  local=3
+[WORKER]       [->]  worker_20_core_6 started  core=6  local=0
+[WORKER]       [->]  worker_21_core_6 started  core=6  local=1
+[WORKER]       [->]  worker_22_core_6 started  core=6  local=2
+[WORKER]       [->]  worker_23_core_6 started  core=6  local=3
+[WORKER]       [->]  worker_24_core_7 started  core=7  local=0
+[WORKER]       [->]  worker_25_core_7 started  core=7  local=1
+[WORKER]       [->]  worker_26_core_7 started  core=7  local=2
+[WORKER]       [->]  worker_27_core_7 started  core=7  local=3
+[WORKER]       [->]  worker_28_core_8 started  core=8  local=0
+[WORKER]       [->]  worker_29_core_8 started  core=8  local=1
+[WORKER]       [->]  worker_30_core_8 started  core=8  local=2
+[WORKER]       [->]  worker_31_core_8 started  core=8  local=3
+[GATE]       Admission gate started — full saturation mode
+[GATE]       Admission loop started — unrestricted flow
+[COORD]      Event loop started
+[COORD]      Worker queue started
+[COORD]      Admission gate started
+[COORD]      Convergence monitoring started
+[COORD]      Started successfully!
+  ✓ Coordinator started.
 ```
 
 ### Acceptance:
@@ -688,15 +721,6 @@ def record_task_routed(self, core_id: int, weight: TaskWeight):
 
 
 ```python
-# Mailbox monitor loop runs in the background to track queue lengths and ensure smooth flow.
-async def _mailbox_monitor_loop(self):
-    while self._active:
-        await asyncio.sleep(1.0)
-        for core_id in range(1, self.num_cores + 1):
-            active = int(self.core_patterns.get(core_id, self.workers_per_core))
-            active = max(1, min(self.workers_per_core, active))
-            qs = [self.mailboxes[(core_id, i)].qsize() for i in range(active)]
-
 # Workers are indexed to route correctly and track task flow through the system.
 def _worker_index(self, core_id: int, local_i: int) -> int:
     return (core_id - 1) * self.workers_per_core + local_i
@@ -853,7 +877,7 @@ All panels update in real time via WebSocket push without polling.
 
 > #### Administrative commands operate cleanly without corrupting in-flight state.  
 
-![TokenGate Admin Controls](/assets/admin_panel.png)
+![TokenGate Admin Controls](/assets/per_operation_controls.png)
 
 Two control operations were tested during the WebSocket session:
 
@@ -869,7 +893,7 @@ Drain is a safe shutdown mechanism. It does not kill running tokens,
 does not corrupt pool state, and does not produce false failure counts.
 The system reaches stable idle and can resume without a full restart.
 
-**Kill Token** — marks a specific queued token so it is skipped at dequeue time.
+**Kill Specific Token** — marks a specific queued token so it is skipped at dequeue time.
 
 Kill only affects tokens that have not yet been picked up by a worker.
 Any token already in `EXECUTING` state is unaffected. The worst outcome
@@ -889,10 +913,6 @@ EXCELLENT PERFORMERS (>95% success):
   cpu_heavy      Rate: 100.0%  (1948/1948)   Avg: 0.01s
   cpu_medium     Rate: 100.0%  (3128/3128)   Avg: 0.02s
 ```
-
-Guard House operates in passive observation mode (`auto_block: DISABLED`).
-It does not suppress failures or intervene in execution. When it reports
-100% it is because there were no failures — not because it blocked reporting them.
 
 The execution history dump confirms this at the individual token level:
 250 sampled records, all `"success": true`, sub-10ms execution across all
@@ -1117,8 +1137,8 @@ def _inject_retry_to_pool(self, retry_token: TaskToken):
 
 # Conclusion
 
-As a long read and a lot of code involvement I'll make the conclusion short. There will be a deep dive and  
-extension toward WebSocket when that is finished. If you test this I hope it makes your threading a bit cleaner.
+TokenGate is progressing well, beta is seeing a couple hundred active users, if people are enjoying  
+the system dropping a star helps immensely.
 
 ---
 
@@ -1127,12 +1147,13 @@ Various internal mechanisms and optimizations were not shown in this proof of co
 
 #### What was Proven?
 
-The system proved it could operate and manage various load levels and compute concurrent operations  
-while maintaining correctness and stability.
+The system displayed the ability to manage task execution with core affinity, handle   
+concurrency through worker mailboxes, and provide real-time monitoring and control via   
+WebSocket.
 
 #### What's Next?
 
-- Further WebSocket integrations.
+- Further WebSocket integrations. (e.g. adding more information and pages)
 - Tighten integration between components.
 - Explore more advanced recovery mechanisms and failure modes.
 - Continue optimizing for performance and scalability.

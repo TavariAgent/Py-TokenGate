@@ -1,7 +1,7 @@
 # TokenGate
 
-Welcome to the TokenGate repository.   
-(NOTE: Some documents are slightly out of date - see release notes on GitHub for fuller updates.)
+Welcome to the TokenGate repository. 
+
 ---
 
 ### What it is:
@@ -83,6 +83,28 @@ def main():
         
 if __name__ == "__main__":
     main()
+```
+
+### Awaiting 
+
+The system now supports correct use of `__await__` which has enabled a more fine tuned control of the event bus.  
+Tokens can be gathered and are able to be awaited, allowing for more complex orchestration patterns. 
+
+```python
+# Awaiting individual tokens
+result = await token
+
+# or the full batch
+async def main():
+    coordinator = OperationsCoordinator()
+    coordinator.start()
+    try:
+        tokens = [my_task(i) for i in range(64)]
+        results = await asyncio.gather(*tokens)
+    finally:
+        coordinator.stop()
+
+asyncio.run(main())
 ```
 
 ---

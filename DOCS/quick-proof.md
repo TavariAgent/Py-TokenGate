@@ -692,12 +692,6 @@ The system includes logging and monitoring that allow testers to
 observe task execution.
 
 ```terminaloutput
-
-=====================================================================
-Operations Coordinator - Initializing...
-======================================================================
-
-Detecting CPU topology...
 CPU Topology Detected:
   Physical cores: 8
   Logical cores: 8
@@ -709,93 +703,75 @@ Recommended worker counts:
   Light workload (I/O bound): 32
   Medium workload (mixed): 24
   Heavy workload (CPU bound): 16
-
-Creating foundation components...
-[OVERFLOW_GUARD] Initialized
-  Base budget: 18 MB
-  Retry policies loaded for all complexity levels
-[GUARD_HOUSE] Passive Monitoring initialized
-  Mode: Post-execution analysis
-  Auto-blocking: DISABLED (observation only)
-[AFFINITY] Policy for 8 cores:
-  Heavy:  [1, 2, 3, 4, 5, 6, 7, 8] (preferred: 1)
-  Medium: [2, 3, 4, 5, 6, 7, 8] (preferred: 2)
-  Light:  [3, 4, 5, 6, 7, 8] (preferred: 3)
-Overflow guard initialized
-Guard House initialized
-Core affinity policy created
-
-Building execution pipeline...
-[CORE_PINNED_QUEUE] Initialized:
-  Cores: 8
-  Workers per core: 4
-  Total workers: 32
-  Core-worker mapping:
-    Core 1: Workers [0, 1, 2, 3]
-    Core 2: Workers [4, 5, 6, 7]
-    Core 3: Workers [8, 9, 10, 11]
-    Core 4: Workers [12, 13, 14, 15]
-    Core 5: Workers [16, 17, 18, 19]
-    Core 6: Workers [20, 21, 22, 23]
-    Core 7: Workers [24, 25, 26, 27]
-    Core 8: Workers [28, 29, 30, 31]
-Worker queue created
-Admission gate configured
-
-Configuring convergence engine...
-Prometheus convergence enabled
-
-Operations Coordinator ready!
-  Cores: 8
-  Workers per core: 4
-  Total workers: 32
-  Convergence: ENABLED
-======================================================================
-
-Starting Operations Coordinator...
-
-[CORE_PINNED_QUEUE] Starting 32 mailbox workers...
-[CORE_PINNED_QUEUE] Started 32 workers across 8 cores
-[worker_0_core_1] Started on Core 1 (local 0)
-[worker_1_core_1] Started on Core 1 (local 1)
-[worker_2_core_1] Started on Core 1 (local 2)
-[worker_3_core_1] Started on Core 1 (local 3)
-[worker_4_core_2] Started on Core 2 (local 0)
-[worker_5_core_2] Started on Core 2 (local 1)
-[worker_6_core_2] Started on Core 2 (local 2)
-[worker_7_core_2] Started on Core 2 (local 3)
-[worker_8_core_3] Started on Core 3 (local 0)
-[worker_9_core_3] Started on Core 3 (local 1)
-[worker_10_core_3] Started on Core 3 (local 2)
-[worker_11_core_3] Started on Core 3 (local 3)
-[worker_12_core_4] Started on Core 4 (local 0)
-[worker_13_core_4] Started on Core 4 (local 1)
-[worker_14_core_4] Started on Core 4 (local 2)
-[worker_15_core_4] Started on Core 4 (local 3)
-[worker_16_core_5] Started on Core 5 (local 0)
-[worker_17_core_5] Started on Core 5 (local 1)
-[worker_18_core_5] Started on Core 5 (local 2)
-[worker_19_core_5] Started on Core 5 (local 3)
-[worker_20_core_6] Started on Core 6 (local 0)
-[worker_21_core_6] Started on Core 6 (local 1)
-[worker_22_core_6] Started on Core 6 (local 2)
-[worker_23_core_6] Started on Core 6 (local 3)
-[worker_24_core_7] Started on Core 7 (local 0)
-[worker_25_core_7] Started on Core 7 (local 1)
-[worker_26_core_7] Started on Core 7 (local 2)
-[worker_27_core_7] Started on Core 7 (local 3)
-[worker_28_core_8] Started on Core 8 (local 0)
-[worker_29_core_8] Started on Core 8 (local 1)
-[worker_30_core_8] Started on Core 8 (local 2)
-[worker_31_core_8] Started on Core 8 (local 3)
-[GATE] Admission gate started - full saturation mode
-[GATE] Admission loop started - unrestricted flow
-Event loop started
-Worker queue started
-Admission gate started
-Convergence monitoring started  
-
-Operations Coordinator started successfully!
+[COORD]      Creating foundation components...
+[OVERFLOW]   Initialized
+[OVERFLOW]   Base budget: 65 MB
+[OVERFLOW]   Retry policies loaded for all complexity levels
+[GUARD]      Passive Monitoring initialized
+[GUARD]      Mode: Post-execution analysis
+[GUARD]      Auto-blocking: DISABLED (observation only)
+[AFFINITY]   Policy built for 8 cores
+[AFFINITY]   Heavy:  [1, 2, 3, 4, 5, 6, 7, 8]  preferred=1
+[AFFINITY]   Medium: [2, 3, 4, 5, 6, 7, 8]  preferred=2
+[AFFINITY]   Light:  [3, 4, 5, 6, 7, 8]  preferred=3
+[COORD]      Overflow guard initialized
+[COORD]      Guard House initialized
+[COORD]      Core affinity policy created
+[COORD]      Building execution pipeline...
+[WORKER]     CorePinnedQueue initialized  cores=8  workers_per_core=4  total=32
+[COORD]      Worker queue created
+[COORD]      Admission gate configured
+[COORD]      Configuring convergence engine...
+[COORD]      Prometheus convergence enabled
+[COORD]      Ready!
+[COORD]        Cores:            8
+[COORD]        Workers per core: 4
+[COORD]        Total workers:    32
+[COORD]        Convergence:      ENABLED
+[COORD]      ============================================================
+[COORD]      Starting...
+[WORKER]     Starting 32 mailbox workers...
+[WORKER]     Started 32 workers across 8 cores
+[WORKER]       [->]  worker_0_core_1 started  core=1  local=0
+[WORKER]       [->]  worker_1_core_1 started  core=1  local=1
+[WORKER]       [->]  worker_2_core_1 started  core=1  local=2
+[WORKER]       [->]  worker_3_core_1 started  core=1  local=3
+[WORKER]       [->]  worker_4_core_2 started  core=2  local=0
+[WORKER]       [->]  worker_5_core_2 started  core=2  local=1
+[WORKER]       [->]  worker_6_core_2 started  core=2  local=2
+[WORKER]       [->]  worker_7_core_2 started  core=2  local=3
+[WORKER]       [->]  worker_8_core_3 started  core=3  local=0
+[WORKER]       [->]  worker_9_core_3 started  core=3  local=1
+[WORKER]       [->]  worker_10_core_3 started  core=3  local=2
+[WORKER]       [->]  worker_11_core_3 started  core=3  local=3
+[WORKER]       [->]  worker_12_core_4 started  core=4  local=0
+[WORKER]       [->]  worker_13_core_4 started  core=4  local=1
+[WORKER]       [->]  worker_14_core_4 started  core=4  local=2
+[WORKER]       [->]  worker_15_core_4 started  core=4  local=3
+[WORKER]       [->]  worker_16_core_5 started  core=5  local=0
+[WORKER]       [->]  worker_17_core_5 started  core=5  local=1
+[WORKER]       [->]  worker_18_core_5 started  core=5  local=2
+[WORKER]       [->]  worker_19_core_5 started  core=5  local=3
+[WORKER]       [->]  worker_20_core_6 started  core=6  local=0
+[WORKER]       [->]  worker_21_core_6 started  core=6  local=1
+[WORKER]       [->]  worker_22_core_6 started  core=6  local=2
+[WORKER]       [->]  worker_23_core_6 started  core=6  local=3
+[WORKER]       [->]  worker_24_core_7 started  core=7  local=0
+[WORKER]       [->]  worker_25_core_7 started  core=7  local=1
+[WORKER]       [->]  worker_26_core_7 started  core=7  local=2
+[WORKER]       [->]  worker_27_core_7 started  core=7  local=3
+[WORKER]       [->]  worker_28_core_8 started  core=8  local=0
+[WORKER]       [->]  worker_29_core_8 started  core=8  local=1
+[WORKER]       [->]  worker_30_core_8 started  core=8  local=2
+[WORKER]       [->]  worker_31_core_8 started  core=8  local=3
+[GATE]       Admission gate started — full saturation mode
+[GATE]       Admission loop started — unrestricted flow
+[COORD]      Event loop started
+[COORD]      Worker queue started
+[COORD]      Admission gate started
+[COORD]      Convergence monitoring started
+[COORD]      Started successfully!
+  ✓ Coordinator started.
 ```
 
 *Example outputs from the logging system that demonstrate observability.*
@@ -832,49 +808,45 @@ convergence_verbose: bool = False
 [DEBUG] Recorded: simple_loop_1773226309164460300
   Stopping coordinator...
 
-Stopping Operations Coordinator...
-
-[GATE] Admission gate stopped
-[CORE_PINNED_QUEUE] Stopping all workers...
-[worker_0_core_1] Stopped
-[worker_1_core_1] Stopped
-[worker_2_core_1] Stopped
-[worker_3_core_1] Stopped
-[worker_4_core_2] Stopped
-[worker_5_core_2] Stopped
-[worker_6_core_2] Stopped
-[worker_7_core_2] Stopped
-[worker_8_core_3] Stopped
-[worker_9_core_3] Stopped
-[worker_10_core_3] Stopped
-[worker_11_core_3] Stopped
-[worker_12_core_4] Stopped
-[worker_13_core_4] Stopped
-[worker_14_core_4] Stopped
-[worker_15_core_4] Stopped
-[worker_16_core_5] Stopped
-[worker_17_core_5] Stopped
-[worker_18_core_5] Stopped
-[worker_19_core_5] Stopped
-[worker_20_core_6] Stopped
-[worker_21_core_6] Stopped
-[worker_22_core_6] Stopped
-[worker_23_core_6] Stopped
-[worker_24_core_7] Stopped
-[worker_25_core_7] Stopped
-[worker_26_core_7] Stopped
-[worker_27_core_7] Stopped
-[worker_28_core_8] Stopped
-[worker_29_core_8] Stopped
-[worker_30_core_8] Stopped
-[worker_31_core_8] Stopped
-[CORE_PINNED_QUEUE] All workers stopped
-All components stopped
-
-Operations shutdown complete!
-
+[COORD]      Stopping...
+[GATE]       Admission gate stopped
+[WORKER]     Stopping all workers...
+[WORKER]       [->]  worker_0_core_1 stopped
+[WORKER]       [->]  worker_1_core_1 stopped
+[WORKER]       [->]  worker_2_core_1 stopped
+[WORKER]       [->]  worker_3_core_1 stopped
+[WORKER]       [->]  worker_4_core_2 stopped
+[WORKER]       [->]  worker_5_core_2 stopped
+[WORKER]       [->]  worker_6_core_2 stopped
+[WORKER]       [->]  worker_7_core_2 stopped
+[WORKER]       [->]  worker_8_core_3 stopped
+[WORKER]       [->]  worker_9_core_3 stopped
+[WORKER]       [->]  worker_10_core_3 stopped
+[WORKER]       [->]  worker_11_core_3 stopped
+[WORKER]       [->]  worker_12_core_4 stopped
+[WORKER]       [->]  worker_13_core_4 stopped
+[WORKER]       [->]  worker_14_core_4 stopped
+[WORKER]       [->]  worker_15_core_4 stopped
+[WORKER]       [->]  worker_16_core_5 stopped
+[WORKER]       [->]  worker_17_core_5 stopped
+[WORKER]       [->]  worker_18_core_5 stopped
+[WORKER]       [->]  worker_19_core_5 stopped
+[WORKER]       [->]  worker_20_core_6 stopped
+[WORKER]       [->]  worker_21_core_6 stopped
+[WORKER]       [->]  worker_22_core_6 stopped
+[WORKER]       [->]  worker_23_core_6 stopped
+[WORKER]       [->]  worker_24_core_7 stopped
+[WORKER]       [->]  worker_25_core_7 stopped
+[WORKER]       [->]  worker_26_core_7 stopped
+[WORKER]       [->]  worker_27_core_7 stopped
+[WORKER]       [->]  worker_28_core_8 stopped
+[WORKER]       [->]  worker_29_core_8 stopped
+[WORKER]       [->]  worker_30_core_8 stopped
+[WORKER]       [->]  worker_31_core_8 stopped
+[WORKER]     All workers stopped
+[COORD]      All components stopped
+[COORD]      Shutdown complete
   ✓ Coordinator stopped.
-  Goodbye.
 ```
 </details>
 
@@ -903,8 +875,8 @@ orchestration and recovery mechanisms, see [proof-of-concept.md](proof-of-concep
 
 ## Limits of Claims  
 
-This proof of concept does not establish a new concurrency primitive in   
-Python, nor does it claim replacement of native threading or asyncio   
+This proof of concept and active beta does not establish a new concurrency  
+primitive in Python, nor does it claim replacement of native threading or asyncio   
 semantics. It demonstrates a task model in which tokens are used to bind   
 metadata, admission state, routing policy, and completion handling across   
 an asyncio-driven coordinator and thread-backed execution workers. 

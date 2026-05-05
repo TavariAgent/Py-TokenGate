@@ -1117,22 +1117,13 @@ def record_execution_result(
 
 #### *The architectural endgame is seamless distributed computation.*
 
-The core vision moving forward is simple: A developer provides a script with decorated functions, and the   
-system handles the rest.
-
-The system automatically extracts the functions, analyzes their complexity, and routes them to the appropriate   
-execution environment. That environment could be a local thread pool, a remote cluster, or even a serverless   
-platform. The system handles all routing, scaling, and monitoring automatically based on the function's structural   
-characteristics and current system load. This allows developers to write code exactly as if it were running locally,  
-while TokenGate manages the immense complexities of distributed execution under the hood.
-
-As the engine is extended to support massive high-core-count hardware architectures (like AMD Threadripper), this   
-capability becomes even more powerful. With TokenGate, closed programming environments can be a thing of the past.   
-Users will simply run their scripts with a single command, letting the token engine optimize the physics of the execution.
+The core vision is: A developer provides a script with decorated functions, the system slots in and runs the code.  
+A system like this would enable users to sell timeslots on their high end hardware and clients will purchase slots to lock in  
+execution on that hardware. (This will be added after 1.0 in the long run.)
 
 ## Final Thoughts: 
 
 While TokenGate is still in active development, it establishes a remarkably solid foundation. By enforcing architectural   
 discipline and treating pure Python as a high-fidelity control surface, we have broken through the traditional boundaries   
-of the GIL. I am excited to produce more features, deepen the architecture, and the eventual prospect of "distributed   
+of parallelism. I am excited to produce more features, deepen the architecture, and the eventual prospect of "distributed   
 computing for everyone." 👍

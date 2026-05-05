@@ -32,8 +32,8 @@ stable and actively tested, edge cases and rough spots are expected at this stag
     to use TokenGate and its various features.
 - **Performance optimizations:** I will continue to optimize the performance of TokenGate, especially under  
     high load conditions.
-- **Additional features:** I am considering adding additional features such as more granular control over task  
-    execution and support for distributed execution across multiple machines.
+- **Additional features:** I am considering adding additional features such as task control mechanisms like  
+ "reset token status" to adjust auto-blocking live and possible dristributed compute support in the future.
 
 ## Get Started
 
