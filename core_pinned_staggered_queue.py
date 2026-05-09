@@ -23,8 +23,9 @@ from .threading_metrics import get_metrics
 from .token_system import TaskToken, TokenState
 from .admission_gate import WorkerTaskQueue
 from .core_affinity_queue import TaskWeight
+from .sticky_token import sticky_registry
+from .hash_conductor import conductor, get_active_seed
 from .tg_print import tg_print
-
 
 
 class CorePinnedStaggeredQueue(WorkerTaskQueue):
@@ -70,7 +71,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         self.core_busy: Dict[int, int] = {c: 0 for c in range(1, self.num_cores + 1)}
 
         # Capped mailbox length to prevent runaway memory (DOS safety)
-        self.MAILBOX_MAX = 75 # Max tokens per worker mailbox
+        self.MAILBOX_MAX = 45 # Max tokens per worker mailbox
 
         self.core_patterns: Dict[int, int] = {}
         for core_id in range(1, num_cores + 1):
@@ -132,11 +133,12 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         tg_print('worker', f'Core {core_id} pattern set to {pattern_value}', level='dispatch')
         self.core_patterns[core_id] = int(pattern_value)
         self.metrics.update_pattern(core_id, int(pattern_value))
+        # Re-sync busy/idle metrics so the new pattern is reflected immediately
+        self._sync_worker_state(core_id)
 
-    # optional alias for callers that use set_pattern
+    # Alias for callers that use set_pattern
     def set_pattern(self, core_id: int, pattern_value: int):
         """Alias for set_core_pattern()."""
-
         self.set_core_pattern(core_id, pattern_value)
 
     async def _execute_token(self, token: TaskToken, worker_id: str, core_id: int):
@@ -157,8 +159,9 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
 
         try:
             loop = asyncio.get_running_loop()
-            bound_func = partial(token.func, *token.args, **token.kwargs)
-            result = await loop.run_in_executor(None, bound_func)
+
+            _execute_token_wrapped = partial(self._execute_token_wrapped, token)
+            result = await loop.run_in_executor(None, _execute_token_wrapped)
             token.set_result(result)
             self.total_executed += 1
             success = True
@@ -199,7 +202,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
             else:
                 tg_print('worker', 'No coordinator available for execution record', level='warn')
 
-                # CHECK FOR RETRY (if coordinator and overflow guard available)
+            # CHECK FOR RETRY (if coordinator and overflow guard available)
             guard = None
             if self.coordinator and hasattr(self.coordinator, 'overflow_guard'):
                 guard = self.coordinator.overflow_guard
@@ -254,9 +257,21 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
                         complexity_score=token.metadata.tags.get('complexity_score')
                     )
 
+            # Release the sticky-core pin so the next token for this
+            # (op, args) key can be freely routed again.
+            sticky_registry.unmark(
+                token.metadata.tags.get("sticky_anchor") or token.metadata.operation_type or "",
+                token.args,
+            )
+
+    # !!! FIXED CONVERGENCE !!!
     async def _execute_token_with_metrics(self, token: "TaskToken", worker_id: str, core_id: int):
         """Execute one token while updating worker-state and outcome metrics."""
         op_type = token.metadata.tags.get("operation_type", "unknown")
+
+        # Busy/idle update (pattern aware) — always read live pattern
+        self.core_busy[core_id] = self.core_busy.get(core_id, 0) + 1
+        self._sync_worker_state(core_id)
 
         t0 = time.perf_counter()
         try:
@@ -266,6 +281,18 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         except Exception:
             self.metrics.record_task_failure(op_type, core_id)
             raise
+
+        finally:
+            # Decrement busy and re-sync with current pattern
+            self.core_busy[core_id] = max(0, self.core_busy.get(core_id, 0) - 1)
+            self._sync_worker_state(core_id)
+
+    def _sync_worker_state(self, core_id: int):
+        """Push current busy/idle counts to metrics using the live pattern value."""
+        active_workers = self.core_patterns.get(core_id, self.workers_per_core)
+        busy = min(active_workers, self.core_busy.get(core_id, 0))
+        idle = max(0, active_workers - busy)
+        self.metrics.update_worker_state(core_id, busy, idle)
 
     def get_core_for_weight(self, weight: TaskWeight) -> List[int]:
         """Return the eligible core range for a routing weight.
@@ -394,28 +421,53 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         position, resolved to a core/local-worker mailbox, and enqueued without
         dropping work. If the chosen mailbox is full, the queue retries with the
         least-loaded active worker and then awaits capacity if necessary.
+
+        Sticky-token enforcement: if this (op_name, args) key is already
+        inflight on a core, the token is forced to that same core regardless of
+        weight-based routing.  This prevents a second worker domain from
+        touching the same data concurrently, which would cause cache misses and
+        cross-domain data races.  The pin is released when the token completes.
+
         """
         # Tag + enqueue timestamp
-        op_type = getattr(token, "operation_type", None) or token.metadata.tags.get("operation_type", "unknown")
+        op_type = (
+                getattr(token, "operation_type", None)
+                or getattr(token.metadata, "operation_type", None)
+                or token.metadata.tags.get("operation_type", "unknown")
+        )
         token.metadata.tags["operation_type"] = op_type
         token.metadata.tags["enqueued_at"] = time.perf_counter()
 
         self.metrics.record_task_submission(op_type)
 
-        # Keep your routing address (trace)
+        # Sticky-core resolution
+        # Compute the weight-based candidate core first, then let the sticky
+        # registry either confirm it (first arrival) or redirect to the already-
+        # pinned core (subsequent arrivals with identical op+args).
+        weight = self.classify_token_weight(token)
         position = self.assign_position_for_token(token)
         token.metadata.tags["route_position"] = position
 
         # Derive target from position
         worker_index = position % self.total_workers
-        core_id = (worker_index // self.workers_per_core) + 1
-        local_i = worker_index % self.workers_per_core
+        candidate_core = (worker_index // self.workers_per_core) + 1
+        candidate_local = worker_index % self.workers_per_core
 
-        # Pattern lock: only active locals are eligible
-        active = int(self.core_patterns.get(core_id, self.workers_per_core))
-        active = max(1, min(self.workers_per_core, active))
-        if local_i >= active:
+        # Use sticky_anchor tag as the key name if provided, fall back to op_type
+        sticky_name = token.metadata.tags.get("sticky_anchor") or op_type
+        core_id = self._put_routing_block(token, sticky_name, candidate_core)
+        token.metadata.tags["sticky_core"] = core_id
+
+        if core_id != candidate_core:
+            # Redirected by sticky registry — pick best local on the pinned core.
             local_i = self._choose_local_worker_least_loaded(core_id)
+        else:
+            local_i = candidate_local
+            # Pattern lock: only active locals are eligible
+            active = int(self.core_patterns.get(core_id, self.workers_per_core))
+            active = max(1, min(self.workers_per_core, active))
+            if local_i >= active:
+                local_i = self._choose_local_worker_least_loaded(core_id)
 
         q = self.mailboxes[(core_id, local_i)]
 
@@ -434,6 +486,10 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         # Per-core depth gauge
         self.core_queue_depth[core_id] += 1
         self.metrics.update_queue_depth(core_id, self.core_queue_depth[core_id])
+
+        # Record task weight for heuristic convergence gauge
+        if self.coordinator and hasattr(self.coordinator, 'convergence') and self.coordinator.convergence:
+            self.coordinator.convergence.record_task_weight(core_id, weight.value)
 
     async def start(self, num_executors: int = 4):
         """Create per-worker mailboxes and start all worker-loop tasks.
@@ -533,3 +589,42 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
             'total_failed': self.total_failed,
             'core_position_counters': dict(self.core_position_counters)
         }
+
+    @staticmethod
+    def _put_routing_block(token, op_type, candidate_core):
+        """
+        Drop-in replacement for the sticky_registry.mark() call in put().
+        Shows the routing decision tree for the conductor integration.
+        """
+        external_calls = (
+                getattr(token.metadata, "external_calls", None)
+                or token.metadata.tags.get("external_calls")
+        )
+
+        if external_calls:
+            # Lead token — generate a fresh seed domain and pin to this core.
+            core_id = conductor.charge(token, candidate_core)
+
+        elif token.metadata.tags.get("conductor_seed"):
+            core_id = conductor.register_child(token, candidate_core)
+
+        else:
+            # No conductor involvement — normal sticky routing.
+            sticky_name = token.metadata.tags.get("sticky_anchor") or op_type
+            core_id = sticky_registry.mark(sticky_name, token.args, candidate_core)
+
+        return core_id
+
+    @staticmethod
+    def _execute_token_wrapped(token):
+        """Shows the wrapped callable pattern for _execute_token."""
+        bound_func = partial(token.func, *token.args, **token.kwargs)
+
+        def _conducted():
+            conductor.activate(token)  # sets thread-local seed in executor thread
+            try:
+                return bound_func()
+            finally:
+                conductor.deactivate()  # always clears, even on exception
+
+        return _conducted()

@@ -673,46 +673,46 @@ def record_task_routed(self, core_id: int, weight: TaskWeight):
         self.total_routed += 1
         self._affinity_counts[core_id][weight.value] += 1    
     
-# Async gathers task tokens setting them to the correct state for execution by workers.
-    async def _execute_token(self, token: TaskToken, worker_id: str, core_id: int):
-        """Execute one admitted token on its already-selected core path.
+# Async gathers task tokens setting them to the correct state for execution with workers.
+async def _execute_token(self, token: TaskToken, worker_id: str, core_id: int):
+    """Execute one admitted token on its already-selected core path.
 
-        This method performs the lifecycle transition to EXECUTING, runs the
-        wrapped callable through the executor-backed path, stores the result or
-        error on the token, records execution history for the coordinator, and
-        triggers retry/Guard House hooks when configured.
-        """
-        # Transition to executing
-        if not token.transition_state(TokenState.EXECUTING):
-            print(f"[{worker_id.upper()}] Failed to transition {token.token_id}")
-            return
+    This method performs the lifecycle transition to EXECUTING, runs the
+    wrapped callable through the executor-backed path, stores the result or
+    error on the token, records execution history for the coordinator, and
+    triggers retry/Guard House hooks when configured.
+    """
+    # Transition to executing
+    if not token.transition_state(TokenState.EXECUTING):
+        print(f"[{worker_id.upper()}] Failed to transition {token.token_id}")
+        return
 
-        start_time = time.time()
-        success = False
+    start_time = time.time()
+    success = False
 
-        try:
-            loop = asyncio.get_running_loop()
-            # This is now "partial" instead of lambda for better stability.
-            bound_func = partial(token.func, *token.args, **token.kwargs)
-            # We use run_in_executor to execute the task in a thread, 
-            # allowing us to manage concurrency and avoid blocking the event loop.
-            result = await loop.run_in_executor(None, bound_func) 
-            token.set_result(result)
-            self.total_executed += 1
-            success = True
+    try:
+        loop = asyncio.get_running_loop()
+        # This is now "partial" instead of lambda for better stability.
+        bound_func = partial(token.func, *token.args, **token.kwargs)
+        # We use run_in_executor to execute the task in a thread, 
+        # allowing us to manage concurrency and avoid blocking the event loop.
+        result = await loop.run_in_executor(None, bound_func) 
+        token.set_result(result)
+        self.total_executed += 1
+        success = True
 
-            print(f"[{worker_id.upper()}] ✓ Completed {token.token_id}")
+        print(f"[{worker_id.upper()}] ✓ Completed {token.token_id}")
 
-        except Exception as e:
-            # Failed!
-            token.set_error(e)
-            self.total_failed += 1
-            if self.result_verbose:
-                print(f"[{worker_id.upper()}] ✗ Failed {token.token_id}: {e}")
+    except Exception as e:
+        # Failed!
+        token.set_error(e)
+        self.total_failed += 1
+        if self.result_verbose:
+            print(f"[{worker_id.upper()}] ✗ Failed {token.token_id}: {e}")
 
-        finally:
-            execution_duration = time.time() - start_time
-        # Additional execution recording and Guard House checks would go below here.
+    finally:
+        execution_duration = time.time() - start_time
+    # Additional execution recording and Guard House checks would go below here.
 ```
 
 ### Mailboxes:

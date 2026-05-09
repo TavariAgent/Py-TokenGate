@@ -4,14 +4,18 @@ Thanks for your interest in TokenGate.
 
 ---
 
-This project is currently shared primarily as a proof of concept.  
-Feel free to clone, fork, and experiment with the code.
+TokenGate is an open-source, open-contribution project.   
 
-If you'd like to contribute:
+Contributions are welcome in the form of bug fixes, new features, documentation improvements, and  
+any changes that can enhance the usefulness or performance of the system. 
 
-- Open an issues when problems arise
-- Keep contributions focused and small
-- Prefer clarity over cleverness
-- Preserve research tone of the project
+To contribute to TokenGate please follow these steps:
+1. Fork the repository and create a new branch for your changes.
+2. Make your changes and ensure that they are well-documented and tested.
+3. Submit a pull request with a clear description of your changes and what they solve.  
 
-Bug reports, doc clarifications, system modifications, all contributions are welcome.
+Please ensure that your code adheres to the existing style and conventions of the project.  
+
+Contributions will be reviewed and merged based on their quality, relevance, and alignment with the project's goals.  
+
+Thanks for helping to make TokenGate better!

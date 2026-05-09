@@ -23,6 +23,7 @@ from enum import Enum
 from functools import wraps
 from typing import Callable, Any, Optional, Dict, ParamSpec, Generic, TypeVar
 
+from .hash_conductor import get_active_seed, conductor
 from .tg_print import tg_print
 
 _token_id_counter = itertools.count()
@@ -53,8 +54,7 @@ class TokenMetadata:
     and execution.
     """
     created_at: float
-    created_by: str = "user"  # Track user
-    max_execution_time: float = 300.0  # 5 min default
+    max_execution_time: float = 30.0  # 30 seconds default, can be overridden
     tags: Dict[str, Any] = field(default_factory=dict)
 
     # Tracking
@@ -186,6 +186,10 @@ class TaskToken(Generic[T]):
                 self.metadata.started_at = now
             elif new_state in {TokenState.COMPLETED, TokenState.FAILED, TokenState.KILLED, TokenState.TIMEOUT}:
                 self.metadata.completed_at = now
+                conductor.on_complete(self)
+                if self.metadata.tags.get("conductor_seed"):
+                    tg_print("conductor", f"Decremented  token={self.token_id}  state={new_state.value}",
+                             level="dispatch")
 
         # Emit state transition visibility
         tg_print(
@@ -581,6 +585,11 @@ def task_token_guard(
                 tags=final_tags
             )
             token.metadata.tags["complexity_score"] = metrics.complexity_score
+
+            seed = get_active_seed()
+            if seed:
+                token.metadata.tags["conductor_seed"] = seed
+                conductor.pre_register(seed)  # hold the domain open before put() runs
 
             cb = getattr(global_token_pool, "default_on_state_change", None)
             if cb is not None and getattr(token, "on_state_change", None) is None:

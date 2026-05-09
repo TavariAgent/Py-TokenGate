@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TokenGate Operations Demo</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { font-family: monospace; background-color: #1e1e1e; color: #d4d4d4; padding: 20px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 800px; margin: 0 auto; }
+        .panel { background: #252526; padding: 20px; border-radius: 8px; border: 1px solid #333; }
+        button { background: #0e639c; color: white; border: none; padding: 10px; margin: 5px 0; width: 100%; cursor: pointer; border-radius: 4px; }
+        button:hover { background: #1177bb; }
+        .gated-btn { background: #007acc; }
+        .ungated-btn { background: #d16969; }
+        #log { background: #1e1e1e; height: 300px; overflow-y: auto; padding: 10px; border: 1px solid #333; margin-top: 20px; }
+        .log-entry { margin-bottom: 5px; }
+        .success { color: #4ec9b0; }
+        .queued { color: #ce9178; }
+        .progress { color: #dcdcaa; }
+    </style>
+</head>
+<body>
+
+<div class="grid">
+    <div class="panel">
+        <h3>TokenGate Control Panel</h3>
+        <p>Submit batches to the Async Queue.</p>
+
+        <h4>Light Operations (1000 tasks)</h4>
+        <button class="ungated-btn" onclick="submitTask('light_ungated')">Run Light (Ungated)</button>
+        <button class="gated-btn" onclick="submitTask('light_gated')">Run Light (Gated)</button>
+
+        <h4>Medium Operations (100 tasks)</h4>
+        <button class="ungated-btn" onclick="submitTask('medium_ungated')">Run Medium (Ungated)</button>
+        <button class="gated-btn" onclick="submitTask('medium_gated')">Run Medium (Gated)</button>
+
+        <h4>Heavy Operations (10 tasks)</h4>
+        <button class="ungated-btn" onclick="submitTask('heavy_ungated')">Run Heavy (Ungated)</button>
+        <button class="gated-btn" onclick="submitTask('heavy_gated')">Run Heavy (Gated)</button>
+    </div>
+
+    <div class="panel">
+        <h3>Live Event Log</h3>
+        <div id="log"></div>
+    </div>
+</div>
+
+<script>
+    const socket = io();
+    const logDiv = document.getElementById('log');
+
+    function logMessage(msg, type='normal') {
+        const div = document.createElement('div');
+        div.className = `log-entry ${type}`;
+        div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        logDiv.appendChild(div);
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    function submitTask(type) {
+        socket.emit('submit_task', { type: type });
+    }
+
+    socket.on('connect', () => logMessage('Connected to WebSocket server.', 'success'));
+
+    socket.on('batch_queued', (data) => {
+        logMessage(`Queued: ${data.batch_name} (${data.count} ops)`, 'queued');
+    });
+
+    socket.on('batch_progress', (data) => {
+        logMessage(`Progress: ${data.batch_name} - ${data.percentage}% (${data.completed}/${data.total})`, 'progress');
+    });
+
+    socket.on('batch_complete', (data) => {
+        logMessage(`COMPLETE: ${data.batch_name} finished in ${data.duration}s`, 'success');
+    });
+</script>
+
+</body>
+</html>

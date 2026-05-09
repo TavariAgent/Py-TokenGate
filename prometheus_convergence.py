@@ -17,6 +17,7 @@ overloaded, balanced, or underutilized conditions.
 """
 
 import time
+from collections import deque
 from typing import Dict, List, Optional
 from enum import Enum
 from dataclasses import dataclass
@@ -24,6 +25,9 @@ from dataclasses import dataclass
 from .threading_metrics import get_metrics
 from prometheus_client import generate_latest
 from .tg_print import tg_print
+
+# Weight numeric scores for heuristic averaging
+_WEIGHT_SCORE = {'heavy': 3.0, 'medium': 2.0, 'light': 1.0}
 
 class WorkerPattern(Enum):
     """Per-core worker allocation patterns used by convergence."""
@@ -54,10 +58,10 @@ class PrometheusConvergenceEngine:
     def __init__(
             self,
             topology,
-            queue_wait_threshold: float = 1.0,  # p95 > 1s = overloaded
-            utilization_high: float = 85.0,  # >80% = saturated
-            utilization_low: float = 35.0,  # <40% = underutilized
-            queue_depth_factor: int = 5,  # queue > workers*5 = overloaded
+            queue_wait_threshold: float = 1.0, # p95 > 1s = overloaded
+            utilization_high: float = 75.0, # >75% = saturated
+            utilization_low: float = 30.0, # <25% = underutilized
+            queue_depth_factor: int = 2, # queue > workers*2 = overloaded
     ):
         """
         Initialize the convergence engine and default per-core patterns.
@@ -78,11 +82,92 @@ class PrometheusConvergenceEngine:
 
         # Track current patterns
         self.core_patterns: Dict[int, WorkerPattern] = {}
-        for core_id in range(topology.physical_cores):
+        for core_id in range(1, topology.physical_cores + 1):
             self.core_patterns[core_id] = WorkerPattern.LIGHT
 
         # Track convergence history
         self.convergence_history: List[Dict] = []
+
+        # Per-core weight heuristic gauge (rolling window per core_id)
+        self._weight_window_size = 50
+        self._weight_history: Dict[int, deque] = {}
+        for core_id in range(1, topology.physical_cores + 1):
+            self._weight_history[core_id] = deque(maxlen=self._weight_window_size)
+
+    # ------------------------------------------------------------------
+    # Weight heuristic gauge — per-core rolling average
+    # ------------------------------------------------------------------
+
+    def record_task_weight(self, core_id: int, weight_name: str):
+        """Record an incoming task's weight for heuristic utilization.
+
+        Call this when a task is routed so the convergence engine can
+        gauge per-core pressure from the frequency and heaviness of
+        recent work rather than from active-worker counts.
+
+        Args:
+            core_id: The 1-based physical core the task was routed to.
+            weight_name: One of 'heavy', 'medium', or 'light'.
+        """
+        score = _WEIGHT_SCORE.get(weight_name.lower(), 2.0)
+        entry = (time.monotonic(), score)
+        if core_id in self._weight_history:
+            self._weight_history[core_id].append(entry)
+
+    def gauge_utilization(self, core_id: int, window_seconds: float = 10.0) -> float:
+        """Return heuristic utilization (0-100) for *core_id*.
+
+        The value is derived from the average weight score of tasks that
+        arrived within the last *window_seconds*.  A stream of heavy
+        tasks yields ~100 %; a stream of light tasks yields ~33 %;
+        no recent tasks yields 0 %.
+
+        The score is normalised against the maximum weight (heavy = 3.0)
+        so the returned percentage is directly comparable with the
+        threshold fields ``utilization_high`` and ``utilization_low``.
+        """
+        history = self._weight_history.get(core_id)
+        if not history:
+            return 0.0
+
+        now = time.monotonic()
+        cutoff = now - window_seconds
+
+        # Collect scores within the time window
+        recent_scores = [score for ts, score in history if ts >= cutoff]
+        if not recent_scores:
+            return 0.0
+
+        avg_score = sum(recent_scores) / len(recent_scores)
+        max_score = _WEIGHT_SCORE['heavy']  # 3.0
+
+        # Scale by frequency: more tasks in the window = higher utilization
+        # Normalise task count against the window capacity expectation
+        # (window_size tasks in window_seconds = fully saturated)
+        frequency_factor = min(1.0, len(recent_scores) / self._weight_window_size)
+
+        utilization = (avg_score / max_score) * frequency_factor * 100.0
+        return round(utilization, 2)
+
+    def get_weight_summary(self, core_id: int, window_seconds: float = 10.0) -> dict:
+        """Return a diagnostic summary of recent weight observations."""
+        history = self._weight_history.get(core_id)
+        if not history:
+            return {'recent_tasks': 0, 'avg_weight': 0.0, 'heuristic_util': 0.0}
+
+        now = time.monotonic()
+        cutoff = now - window_seconds
+        recent = [(ts, s) for ts, s in history if ts >= cutoff]
+
+        if not recent:
+            return {'recent_tasks': 0, 'avg_weight': 0.0, 'heuristic_util': 0.0}
+
+        avg = sum(s for _, s in recent) / len(recent)
+        return {
+            'recent_tasks': len(recent),
+            'avg_weight': round(avg, 2),
+            'heuristic_util': self.gauge_utilization(core_id, window_seconds),
+        }
 
     def analyze_cores(self, worker_pool) -> List[CorePressure]:
         """Analyze all physical cores using current Prometheus metric output."""
@@ -93,7 +178,7 @@ class PrometheusConvergenceEngine:
         prom_data = generate_latest(registry).decode('utf-8')
 
         # Parse metrics for each core
-        for core_id in range(self.topology.physical_cores):
+        for core_id in range(1, self.topology.physical_cores + 1):
             pressure = self._analyze_single_core(core_id, prom_data, worker_pool)
             pressures.append(pressure)
 
@@ -113,12 +198,8 @@ class PrometheusConvergenceEngine:
             {'core_id': str(core_id)}
         )
 
-        # Get worker utilization
-        utilization = self._extract_gauge(
-            prom_data,
-            'threading_worker_utilization_percent',
-            {'core_id': str(core_id)}
-        )
+        # Heuristic utilization from weight gauge (replaces active-worker %)
+        utilization = self.gauge_utilization(core_id)
 
         # Calculate queue wait p95 from histogram
         queue_wait_p95 = self._calculate_histogram_percentile(
@@ -146,8 +227,8 @@ class PrometheusConvergenceEngine:
 
         return CorePressure(
             core_id=core_id,
-            queue_depth=int(queue_depth) if queue_depth else 0,
-            worker_utilization=utilization if utilization else 0.0,
+            queue_depth=int(queue_depth) if queue_depth is not None else 0,
+            worker_utilization=utilization if utilization is not None else 0.0,
             queue_wait_p95=queue_wait_p95,
             avg_task_duration=avg_duration,
             pressure_level=pressure_level,
@@ -166,9 +247,9 @@ class PrometheusConvergenceEngine:
         workers_per_core = worker_pool.workers_per_core if worker_pool else 4
 
         # Convert None to 0 for comparisons
-        queue_depth = queue_depth or 0
-        utilization = utilization or 0
-        queue_wait_p95 = queue_wait_p95 or 0
+        queue_depth = queue_depth if queue_depth is not None else 0.0
+        utilization = utilization if utilization is not None else 0.0
+        queue_wait_p95 = queue_wait_p95 if queue_wait_p95 is not None else 0.0
 
         # RULE 1: High queue wait time = OVERLOADED
         if queue_wait_p95 > self.queue_wait_threshold:
@@ -269,7 +350,11 @@ class PrometheusConvergenceEngine:
             },
             'pattern_distribution': distribution,
             'total_changes': len(self.convergence_history),
-            'recent_changes': self.convergence_history[-5:] if self.convergence_history else []
+            'recent_changes': self.convergence_history[-5:] if self.convergence_history else [],
+            'weight_gauge': {
+                core_id: self.get_weight_summary(core_id)
+                for core_id in self.core_patterns
+            }
         }
 
     # Utility methods for parsing Prometheus data

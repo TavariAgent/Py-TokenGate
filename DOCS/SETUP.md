@@ -24,9 +24,8 @@ class OperationsCoordinator: # Under this class are where you find configuration
             self, 
             workers_per_core: int = 4, # Do not modify this without disabling convergence! Do not go under 2 workers.
             enable_convergence: bool = True, # Controls dynamic worker counts.
-            convergence_verbose: bool = False, # Now lives in tg_print!! Controls verbosity, DO NOT enable with REPL.
-            base_memory_budget_mb: int = 45, # This is a control for operation memory (adjustable).
-            num_executors: int = 8, # This controls number of parallel executors.
+            base_memory_budget_mb: int = 45, # This is a control for warming up operation memory locals (adjustable).
+            num_executors: int = 8, # This controls number of parallel async executers (for token gathering).
             auto_block_dangerous: bool = False, # Blocks explosive tasks with possibly dangerous inputs.
     ):
 ```

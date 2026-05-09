@@ -71,7 +71,6 @@ class WorkerPoolInterface:
             'workers_per_core': self.workers_per_core
         }
 
-
 class OperationsCoordinator:
     """Owns runtime startup, component wiring, and orderly shutdown."""
     def __init__(
@@ -111,7 +110,7 @@ class OperationsCoordinator:
         # Metrics
         self.metrics = get_metrics()
 
-        self.recent_executions = deque(maxlen=95) # ← Tune for micro performance gains
+        self.recent_executions = deque(maxlen=100) # ← Tune for micro performance gains
         self._executions_lock = threading.RLock()  # ← RLock for safety!
 
         tg_print('coordinator', 'Overflow guard initialized')
@@ -346,6 +345,7 @@ class OperationsCoordinator:
                             level='dispatch',
                         )
                         self.convergence.apply_pattern(core_id, new_pattern, self.worker_pool)
+
             except Exception as e:
                 tg_print('convergence', f'Error: {e}', level='error')
                 await asyncio.sleep(5.0)

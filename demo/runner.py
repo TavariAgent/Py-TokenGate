@@ -22,6 +22,8 @@ from .series_ops import run_series_saturation_demo
 from .chain_ops import run_chain_demo, run_parallel_chains_demo
 from .concurrency_test import run_concurrency_demo
 from .endurance import EnduranceRunner
+from .cache_storm import run_cache_storm_test
+from .hash_conductor_test import run_hash_conductor_test
 
 from ..operations_coordinator import OperationsCoordinator
 
@@ -123,6 +125,15 @@ def cmd_chain():
     run_chain_demo(chain_count=5)
     run_parallel_chains_demo(chain_count=4)
 
+def cmd_cache_storm():
+    if not _require_coordinator():
+        return
+    run_cache_storm_test(coordinator=_coordinator)
+
+def cmd_hash_conductor():
+    if not _require_coordinator():
+        return
+    run_hash_conductor_test(coordinator=_coordinator)
 
 def cmd_concurrency():
     if not _require_coordinator(): return
@@ -180,15 +191,18 @@ def cmd_help():
    1  start        Start the OperationsCoordinator
    2  stop         Stop the coordinator
    3  status       Show coordinator state
+   ────────────────────────────────────────────────────
 
-   4  cpu          CPU-bound scheduling proof
-   5  io           I/O-bound scheduling proof
-   6  series       Backpressure / pool saturation demo
-   7  chain        Explicit call chain + parallel chains demo
-   8  concurrency  Concurrent burst with overlap measurement
-   9  endurance    Sustained load modulator (blocks, Ctrl+C to stop early)
-  10  all          Run all proofs sequentially (excludes endurance)
-  11  mixed        Operate a mixed set
+    4  cpu          CPU-bound scheduling proof
+    5  io           I/O-bound scheduling proof
+    6  series       Backpressure / pool saturation demo
+    7  chain        Explicit call chain + parallel chains demo
+    8  concurrency  Concurrent burst with overlap measurement
+    9  endurance    Sustained load modulator (blocks, Ctrl+C to stop early)
+    10  all          Run all proofs sequentially (excludes endurance)
+    11  mixed        Operate a mixed set
+    12  cache_storm  Sticky-token cache storm: concurrent same-key routing stress test
+    13  conductor    Hash conductor: seed-based core domain anchoring test
 
       help / ?     Show this message
       exit / quit  Stop coordinator and exit
@@ -211,8 +225,9 @@ COMMANDS = {
     '9':  cmd_endurance,   'endurance':   cmd_endurance,
     '10': cmd_all,         'all':         cmd_all,
     '11': cmd_mixed,       'mixed':       cmd_mixed,
+    '12': cmd_cache_storm, 'cache_storm': cmd_cache_storm,
+    '13': cmd_hash_conductor, 'hash_conductor': cmd_hash_conductor,
     '?':  cmd_help,        'help':        cmd_help,
-
 }
 
 BANNER = """
