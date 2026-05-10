@@ -15,8 +15,10 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import operator
 import threading
 import time
+from collections.abc import Iterator
 from concurrent.futures import Future
 from dataclasses import dataclass, field
 from enum import Enum
@@ -111,7 +113,7 @@ class TaskToken(Generic[T]):
         self._kill_requested = threading.Event()
         self._killed_reason: Optional[str] = None
 
-    # ── __await__ ──────────────────────────────────
+    # ── __await__ ────────────────────────────────────────────────────────────────
     #
     # This bridges TaskToken's internal concurrent.futures.Future to whatever asyncio
     # event loop is currently running, making the token a native awaitable.
@@ -154,6 +156,237 @@ class TaskToken(Generic[T]):
     # separate. That's fine: the bridge is through the thread-safe cf Future,
     # not through shared loop state.
     # ─────────────────────────────────────────────────────────────────────────────
+
+    # ── Result Proxies ──────────────────────────────────────────────────────────────
+    #
+    # All dunders below delegate to the resolved result via _resolve().
+    # _resolve() blocks if the token is not yet COMPLETED, same behaviour as .get().
+    #
+    # Deliberately excluded:
+    #   __repr__  — keeps token identity visible in debuggers/logs, not the result
+    #   __eq__    — delegating this breaks dict lookups in TokenPool.tokens{}
+    #   __hash__  — Python nulls this automatically if __eq__ is overridden; left
+    #               paired with __eq__ to avoid silent breakage
+    # ─────────────────────────────────────────────────────────────────────────────
+
+    def _resolve(self) -> T:
+        # Fast path — already resolved, no blocking needed
+        if self._result_future.done():
+            return self._result_future.result()
+
+        # Guard — never block the event loop thread
+        try:
+            asyncio.get_running_loop()
+            is_async = True
+        except RuntimeError:
+            is_async = False
+
+        if is_async:
+            raise RuntimeError(
+                f"Token '{self.token_id}' not yet resolved — "
+                f"cannot block the event loop. Use 'await token' instead."
+            )
+
+        # Sync context — safe to block, sticky anchor holds here
+        # until the coordinator delivers the result
+        return self._result_future.result()
+
+    # ── Type Conversion ───────────────────────────────────────────────────────────
+
+    def __bool__(self):
+        return bool(self._resolve())
+
+    def __int__(self):
+        return int(self._resolve())
+
+    def __float__(self):
+        return float(self._resolve())
+
+    def __complex__(self):
+        return complex(self._resolve())
+
+    def __index__(self):
+        return operator.index(self._resolve())
+
+    def __bytes__(self):
+        return bytes(self._resolve())
+
+    def __str__(self):
+        return str(self._resolve())
+
+    def __format__(self, spec):
+        return format(self._resolve(), spec)
+
+    # ── Collection ────────────────────────────────────────────────────────────────
+
+    def __len__(self):
+        return len(self._resolve())
+
+    def __length_hint__(self):
+        return operator.length_hint(self._resolve())
+
+    # ── __iter__ ────────────────────────────────────────────────────────────────
+    # What this does:
+    #
+    # This is to resolve tokens undergoeing iterations and will assist in type
+    # checking for syncrounous collections, it goes alongside the __await__.
+    # ─────────────────────────────────────────────────────────────────────────────
+
+    def __iter__(self) -> Iterator[Any]:
+        result = self._result_future.result()
+        if not hasattr(result, '__iter__'):
+            raise TypeError(
+                f"TaskToken[{type(result).__name__}] is not iterable"
+            )
+        return iter(result)
+
+    def __reversed__(self) -> Iterator[Any]:
+        result = self._result_future.result()
+        reversible = hasattr(result, '__reversed__') or (
+                hasattr(result, '__len__') and hasattr(result, '__getitem__')
+        )
+        if not reversible:
+            raise TypeError(
+                f"TaskToken[{type(result).__name__}] is not reversible"
+            )
+        return reversed(result)
+
+    def __contains__(self, item):
+        return item in self._resolve()
+
+    def __getitem__(self, key):
+        return self._resolve()[key]
+
+    def __setitem__(self, key, val):
+        self._resolve()[key] = val
+
+    def __delitem__(self, key):
+        del self._resolve()[key]
+
+    # ── Unary Arithmetic ──────────────────────────────────────────────────────────
+
+    def __neg__(self):
+        return -self._resolve()
+
+    def __pos__(self):
+        return +self._resolve()
+
+    def __abs__(self):
+        return abs(self._resolve())
+
+    def __invert__(self):
+        return ~self._resolve()
+
+    # ── Binary Arithmetic ─────────────────────────────────────────────────────────
+    # Reflected variants (r-prefix) handle cases where the left operand is not
+    # a TaskToken — e.g. 4.0 * token — Python falls back to token.__rmul__(4.0).
+
+    def __add__(self, other):
+        return self._resolve() + other
+
+    def __radd__(self, other):
+        return other + self._resolve()
+
+    def __sub__(self, other):
+        return self._resolve() - other
+
+    def __rsub__(self, other):
+        return other - self._resolve()
+
+    def __mul__(self, other):
+        return self._resolve() * other
+
+    def __rmul__(self, other):
+        return other * self._resolve()
+
+    def __truediv__(self, other):
+        return self._resolve() / other
+
+    def __rtruediv__(self, other):
+        return other / self._resolve()
+
+    def __floordiv__(self, other):
+        return self._resolve() // other
+
+    def __rfloordiv__(self, other):
+        return other // self._resolve()
+
+    def __mod__(self, other):
+        return self._resolve() % other
+
+    def __rmod__(self, other):
+        return other % self._resolve()
+
+    def __pow__(self, other):
+        return self._resolve() ** other
+
+    def __rpow__(self, other):
+        return other ** self._resolve()
+
+    def __matmul__(self, other):
+        return self._resolve() @ other
+
+    def __rmatmul__(self, other):
+        return other @ self._resolve()
+
+    # ── Bitwise ───────────────────────────────────────────────────────────────────
+
+    def __and__(self, other):
+        return self._resolve() & other
+
+    def __rand__(self, other):
+        return other & self._resolve()
+
+    def __or__(self, other):
+        return self._resolve() | other
+
+    def __ror__(self, other):
+        return other | self._resolve()
+
+    def __xor__(self, other):
+        return self._resolve() ^ other
+
+    def __rxor__(self, other):
+        return other ^ self._resolve()
+
+    def __lshift__(self, other):
+        return self._resolve() << other
+
+    def __rlshift__(self, other):
+        return other << self._resolve()
+
+    def __rshift__(self, other):
+        return self._resolve() >> other
+
+    def __rrshift__(self, other):
+        return other >> self._resolve()
+
+    # ── Comparison ────────────────────────────────────────────────────────────────
+
+    def __lt__(self, other):
+        return self._resolve() < other
+
+    def __le__(self, other):
+        return self._resolve() <= other
+
+    def __gt__(self, other):
+        return self._resolve() > other
+
+    def __ge__(self, other):
+        return self._resolve() >= other
+
+    # ── Context Manager ───────────────────────────────────────────────────────────
+
+    def __enter__(self):
+        return self._resolve().__enter__()
+
+    def __exit__(self, *args):
+        return self._resolve().__exit__(*args)
+
+    # ── Callable ──────────────────────────────────────────────────────────────────
+
+    def __call__(self, *args, **kwargs):
+        return self._resolve()(*args, **kwargs)
 
     def transition_state(self, new_state: TokenState) -> bool:
         """Attempt a validated lifecycle transition with tg_print visibility."""

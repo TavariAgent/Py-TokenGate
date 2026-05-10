@@ -50,16 +50,16 @@ Level = Literal['info', 'debug', 'state', 'dispatch', 'warn', 'error']
 
 _DEFAULT_CHANNELS: dict[str, bool] = {
     'gate':        True,    # admission_gate.py
-    'pool':        True,    # token_system.py  TokenPool
-    'token':       True,    # token_system.py  TaskToken lifecycle
-    'coordinator': True,    # operations_coordinator.py
-    'convergence': True,    # prometheus_convergence.py --- DO NOT USE IN A REPL ---
-    'worker':      True,    # core_pinned_staggered_queue.py
+    'pool':        False,    # token_system.py  TokenPool
+    'token':       False,    # token_system.py  TaskToken lifecycle
+    'coordinator': False,    # operations_coordinator.py
+    'convergence': False,   # prometheus_convergence.py --- DO NOT USE IN A REPL ---
+    'worker':      False,    # core_pinned_staggered_queue.py
     'storage':     False,   # storage_throttle.py
     'guard':       False,   # guard_house.py
     'overflow':    False,   # overflow_guard.py
     'affinity':    False,   # core_affinity_queue.py  (verbose — off by default)
-    'sticky':      False,   # sticky_token.py
+    'sticky':      True,    # sticky_token.py
     'conductor':   False,   # hash_conductor.py
 }
 

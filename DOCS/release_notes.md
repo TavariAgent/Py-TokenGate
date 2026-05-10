@@ -24,7 +24,7 @@ explicit name, independent of operation type.
 ```python
 @task_token_guard(
     operation_type="my_op",
-    tags={"weight": "medium", "sticky_anchor": "my_domain"},
+    tags={"weight": "medium", "sticky_anchor": "op_token"},
 )
 def my_operation(n: int) -> int:
     ...

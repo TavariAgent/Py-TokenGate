@@ -95,20 +95,7 @@ The system now supports correct use of `__await__` which has enabled a more fine
 Tokens can be gathered and are able to be awaited, allowing for more complex orchestration patterns. 
 
 ```python
-# Awaiting individual tokens
-result = await token
-
-# or the full batch
-async def main():
-    coordinator = OperationsCoordinator()
-    coordinator.start()
-    try:
-        tokens = [my_task(i) for i in range(64)]
-        results = await asyncio.gather(*tokens)
-    finally:
-        coordinator.stop()
-
-asyncio.run(main())
+results  = await asyncio.gather(*tokens, return_exceptions=True)
 ```
 
 ---

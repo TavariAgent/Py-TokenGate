@@ -77,7 +77,9 @@ class AdmissionGate:
 
     async def _admit_token(self, token: TaskToken):
         """Transition a token into the admitted state and enqueue it for execution."""
-        # Transition state
+        if token.state == TokenState.CREATED:
+            token.transition_state(TokenState.WAITING)
+
         if not token.transition_state(TokenState.ADMITTED):
             tg_print(
                 'gate',
@@ -85,16 +87,7 @@ class AdmissionGate:
                 level='warn',
             )
             return
-
-        if token.state == TokenState.CREATED:
-            token.transition_state(TokenState.WAITING)
-
-        tg_print(
-            'gate',
-            f'{token.token_id}  op={token.metadata.operation_type}  -> ADMITTED',
-            level='state',
-        )
-
+        
         # Route to worker queue
         await self.worker_queue.put(token)
 
