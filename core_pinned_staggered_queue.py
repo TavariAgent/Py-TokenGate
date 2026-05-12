@@ -264,7 +264,6 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
                 token.args,
             )
 
-    # !!! FIXED CONVERGENCE !!!
     async def _execute_token_with_metrics(self, token: "TaskToken", worker_id: str, core_id: int):
         """Execute one token while updating worker-state and outcome metrics."""
         op_type = token.metadata.tags.get("operation_type", "unknown")

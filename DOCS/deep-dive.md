@@ -1032,7 +1032,7 @@ as an active threat. It will reject all future tokens of that type at the admiss
 plane. This is the ultimate "Active DoS Defense" mechanism, designed to protect the event bus from being flooded by   
 persistently failing or malicious tasks.
 
-```python
+```python  
 def record_execution_result(
         self,
         method_name: str,

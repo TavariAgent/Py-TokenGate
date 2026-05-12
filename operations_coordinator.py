@@ -77,7 +77,7 @@ class OperationsCoordinator:
             self,
             workers_per_core:       int  = 4,
             enable_convergence:     bool = True,
-            base_memory_budget_mb:  int  = 65,
+            base_memory_budget_mb:  int  = 65, # For memory pre-warming (doesn't effect the operation memory costs.)
             num_executors:          int  = 4,
             auto_block_dangerous:   bool = False,
     ):

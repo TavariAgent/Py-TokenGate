@@ -67,19 +67,6 @@ Public API
     make_hashable(obj)    →  Hashable
     safe_args_key(args)   →  tuple[Hashable, ...]
     is_hashable(obj)      →  bool
-
-Integration point (sticky_token.py)
-=====================================
-    from .unhashable_checker import make_hashable
-
-    def freeze(val):
-        if isinstance(val, dict):
-            return tuple(sorted((k, freeze(v)) for k, v in val.items()))
-        if isinstance(val, (list, tuple)):
-            return tuple(freeze(v) for v in val)
-        if isinstance(val, set):
-            return frozenset(freeze(v) for v in val)
-        return make_hashable(val)   # ← single line replaces bare `return val`
 """
 from __future__ import annotations
 
@@ -181,7 +168,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # xml.etree.ElementTree.Element defines __eq__ without __hash__ in Py 3.8+
     try:
-        import xml.etree.ElementTree as _ET
+        import xml.etree.ElementTree as _ET # Type: Ignore: Only for installed versions
         if isinstance(obj, _ET.Element):
             return 'xml.Element', obj.tag, id(obj)
     except Exception:
@@ -189,7 +176,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # ── 4. NumPy ──────────────────────────────────────────────────────────
     try:
-        import numpy as np
+        import numpy as np # Type: Ignore: Only for installed versions
         if isinstance(obj, np.ndarray):
             return 'ndarray', obj.shape, str(obj.dtype)
         if isinstance(obj, np.generic):
@@ -202,7 +189,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # ── 5. Pandas ─────────────────────────────────────────────────────────
     try:
-        import pandas as pd
+        import pandas as pd # Type: Ignore: Only for installed versions
         if isinstance(obj, pd.DataFrame):
             return 'DataFrame', obj.shape, tuple(str(d) for d in obj.dtypes)
         if isinstance(obj, pd.Series):
@@ -222,7 +209,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
     # Non-scalar tensors raise RuntimeError (not TypeError) on hash(),
     # so they sometimes pass the fast path and crash later.
     try:
-        import torch
+        import torch # Type: Ignore: Only for installed versions
         if isinstance(obj, torch.Tensor):
             return 'Tensor', tuple(obj.shape), str(obj.dtype), obj.device.type
     except (ImportError, Exception):
@@ -230,7 +217,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # ── 7. TensorFlow / Keras ─────────────────────────────────────────────
     try:
-        import tensorflow as tf
+        import tensorflow as tf # Type: Ignore: Only for installed versions
         if isinstance(obj, (tf.Tensor, tf.Variable)):
             shape = tuple(obj.shape.as_list()) if obj.shape.rank is not None else None
             return 'tf.Tensor', type(obj).__name__, shape, obj.dtype.name
@@ -239,8 +226,8 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # ── 8. JAX ────────────────────────────────────────────────────────────
     try:
-        import jax
-        import jax.numpy as jnp
+        import jax # Type: Ignore: Only for installed versions
+        import jax.numpy as jnp # Type: Ignore: Only for installed versions
         # jax.Array covers DeviceArray, ShapedArray, and all JAX array types
         if isinstance(obj, jax.Array):
             return 'jax.Array', obj.shape, str(obj.dtype)
@@ -251,7 +238,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # CuPy (GPU NumPy)
     try:
-        import cupy as cp
+        import cupy as cp # Type: Ignore: Only for installed versions
         if isinstance(obj, cp.ndarray):
             return 'cupy.ndarray', obj.shape, str(obj.dtype)
     except (ImportError, Exception):
@@ -259,8 +246,8 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # Dask
     try:
-        import dask.array as da
-        import dask.dataframe as dd
+        import dask.array as da # Type: Ignore: Only for installed versions
+        import dask.dataframe as dd # Type: Ignore: Only for installed versions
         if isinstance(obj, da.Array):
             return 'dask.Array', obj.shape, str(obj.dtype)
         if isinstance(obj, dd.DataFrame):
@@ -272,7 +259,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # Xarray
     try:
-        import xarray as xr
+        import xarray as xr # Type: Ignore: Only for installed versions
         if isinstance(obj, xr.DataArray):
             return 'xr.DataArray', obj.shape, str(obj.dtype), obj.name
         if isinstance(obj, xr.Dataset):
@@ -282,7 +269,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # Polars
     try:
-        import polars as pl
+        import polars as pl # Type: Ignore: Only for installed versions
         if isinstance(obj, pl.DataFrame):
             return 'pl.DataFrame', obj.shape, tuple(str(d) for d in obj.dtypes)
         if isinstance(obj, pl.Series):
@@ -294,7 +281,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # PyArrow
     try:
-        import pyarrow as pa
+        import pyarrow as pa # Type: Ignore: Only for installed versions
         if isinstance(obj, pa.Table):
             return 'pa.Table', obj.shape, tuple(str(f.type) for f in obj.schema)
         if isinstance(obj, (pa.Array, pa.ChunkedArray)):
@@ -306,7 +293,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # Awkward Array
     try:
-        import awkward as ak
+        import awkward as ak # Type: Ignore: Only for installed versions
         if isinstance(obj, ak.Array):
             return 'ak.Array', obj.ndim, str(obj.type)
     except (ImportError, Exception):
@@ -314,7 +301,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # PyData Sparse
     try:
-        import sparse
+        import sparse # Type: Ignore: Only for installed versions
         if isinstance(obj, sparse.SparseArray):
             return 'sparse.Array', obj.shape, str(obj.dtype)
     except (ImportError, Exception):
@@ -322,7 +309,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # SciPy sparse
     try:
-        import scipy.sparse as sp
+        import scipy.sparse as sp # Type: Ignore: Only for installed versions
         if sp.issparse(obj):
             return 'scipy.sparse', type(obj).__name__, obj.shape, obj.dtype.str
     except (ImportError, Exception):
@@ -330,7 +317,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # Zarr
     try:
-        import zarr
+        import zarr # Type: Ignore: Only for installed versions
         if isinstance(obj, (zarr.Array, zarr.Group)):
             return 'zarr', type(obj).__name__, getattr(obj, 'shape', None)
     except (ImportError, Exception):
@@ -338,7 +325,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # H5Py
     try:
-        import h5py
+        import h5py # Type: Ignore: Only for installed versions
         if isinstance(obj, (h5py.Dataset, h5py.Group, h5py.File)):
             return 'h5py', type(obj).__name__, getattr(obj, 'name', id(obj))
     except (ImportError, Exception):
@@ -346,7 +333,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # Numba typed lists/arrays
     try:
-        from numba.typed import List as _NumbaList, Dict as _NumbaDict
+        from numba.typed import List as _NumbaList, Dict as _NumbaDict # Type: Ignore: Only for installed versions
         if isinstance(obj, _NumbaList):
             return 'numba.List', len(obj)
         if isinstance(obj, _NumbaDict):
@@ -356,7 +343,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # MXNet NDArray
     try:
-        import mxnet as mx
+        import mxnet as mx # Type: Ignore: Only for installed versions
         if isinstance(obj, mx.nd.NDArray):
             return 'mx.NDArray', obj.shape, str(obj.dtype)
     except (ImportError, Exception):
@@ -364,7 +351,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # PaddlePaddle Tensor
     try:
-        import paddle
+        import paddle # Type: Ignore: Only for installed versions
         if isinstance(obj, paddle.Tensor):
             return 'paddle.Tensor', tuple(obj.shape), str(obj.dtype)
     except (ImportError, Exception):
@@ -372,7 +359,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # ── 10. Graph libraries ───────────────────────────────────────────────
     try:
-        import networkx as nx
+        import networkx as nx # Type: Ignore: Only for installed versions
         if isinstance(obj, nx.Graph):
             return ('nx.Graph', type(obj).__name__, obj.number_of_nodes(),
                     obj.number_of_edges())
@@ -381,7 +368,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # igraph
     try:
-        import igraph
+        import igraph # Type: Ignore: Only for installed versions
         if isinstance(obj, igraph.Graph):
             return 'igraph.Graph', obj.vcount(), obj.ecount(), obj.is_directed()
     except (ImportError, Exception):
@@ -389,14 +376,14 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # ── 11. Geospatial ────────────────────────────────────────────────────
     try:
-        from shapely.geometry.base import BaseGeometry
+        from shapely.geometry.base import BaseGeometry # Type: Ignore: Only for installed versions
         if isinstance(obj, BaseGeometry):
             return 'shapely', type(obj).__name__, obj.geom_type, id(obj)
     except (ImportError, Exception):
         pass
 
     try:
-        import geopandas as gpd
+        import geopandas as gpd # Type: Ignore: Only for installed versions
         if isinstance(obj, gpd.GeoDataFrame):
             return 'GeoDataFrame', obj.shape
         if isinstance(obj, gpd.GeoSeries):
@@ -406,14 +393,14 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # ── 12. Document / markup parsing ─────────────────────────────────────
     try:
-        from lxml import etree as _letree
+        from lxml import etree as _letree # Type: Ignore: Only for installed versions
         if isinstance(obj, (_letree._Element, _letree._ElementTree)):
             return 'lxml.Element', getattr(obj, 'tag', None), id(obj)
     except (ImportError, Exception):
         pass
 
     try:
-        import bs4
+        import bs4 # Type: Ignore: Only for installed versions
         if isinstance(obj, bs4.element.Tag):
             return 'bs4.Tag', obj.name, id(obj)
         if isinstance(obj, bs4.BeautifulSoup):
@@ -423,7 +410,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # ── 13. Database / ORM ────────────────────────────────────────────────
     try:
-        import sqlalchemy
+        import sqlalchemy # Type: Ignore: Only for installed versions
         # Query, Table, Column, Select, etc. all unhashable in SQLAlchemy 2.x
         if hasattr(sqlalchemy, 'orm') and isinstance(
                 obj, sqlalchemy.orm.Query):
@@ -434,7 +421,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
             return 'sa.Column', str(obj.name), id(obj)
         # Catch any other SQLAlchemy ClauseElement
         try:
-            from sqlalchemy.sql.elements import ClauseElement
+            from sqlalchemy.sql.elements import ClauseElement # Type: Ignore: Only for installed versions
             if isinstance(obj, ClauseElement):
                 return 'sa.Clause', type(obj).__name__, id(obj)
         except Exception:
@@ -444,7 +431,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # Django QuerySet / Model instance
     try:
-        from django.db.models import QuerySet as _DjQS, Model as _DjModel
+        from django.db.models import QuerySet as _DjQS, Model as _DjModel # Type: Ignore: Only for installed versions
         if isinstance(obj, _DjQS):
             return 'django.QuerySet', obj.model.__name__, id(obj)
         if isinstance(obj, _DjModel):
@@ -454,7 +441,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # Peewee
     try:
-        from peewee import Model as _PwModel, SelectBase as _PwSelect
+        from peewee import Model as _PwModel, SelectBase as _PwSelect # Type: Ignore: Only for installed versions
         if isinstance(obj, _PwSelect):
             return 'peewee.Query', id(obj)
         if isinstance(obj, _PwModel):
@@ -464,8 +451,8 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # ── 14. Distributed / Big Data ────────────────────────────────────────
     try:
-        from pyspark.sql import DataFrame as _SparkDF
-        from pyspark.rdd import RDD as _SparkRDD
+        from pyspark.sql import DataFrame as _SparkDF # Type: Ignore: Only for installed versions
+        from pyspark.rdd import RDD as _SparkRDD # Type: Ignore: Only for installed versions
         if isinstance(obj, _SparkDF):
             return 'spark.DataFrame', tuple(obj.columns)
         if isinstance(obj, _SparkRDD):
@@ -474,7 +461,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
         pass
 
     try:
-        import ray
+        import ray # Type: Ignore: Only for installed versions
         if hasattr(ray, 'ObjectRef') and isinstance(obj, ray.ObjectRef):
             return 'ray.ObjectRef', _safe_repr(obj)
     except (ImportError, Exception):
@@ -482,7 +469,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # ── 15. GUI / Game ────────────────────────────────────────────────────
     try:
-        import pygame
+        import pygame # Type: Ignore: Only for installed versions
         if isinstance(obj, pygame.Surface):
             return 'pygame.Surface', obj.get_size(), obj.get_bitsize()
     except (ImportError, Exception):
@@ -501,7 +488,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # pyglet
     try:
-        import pyglet
+        import pyglet # Type: Ignore: Only for installed versions
         if isinstance(obj, pyglet.event.EventDispatcher):
             return 'pyglet', type(obj).__name__, id(obj)
     except (ImportError, Exception):
@@ -509,7 +496,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # ── 16. Image / AV ────────────────────────────────────────────────────
     try:
-        from PIL import Image as _PILImage
+        from PIL import Image as _PILImage # Type: Ignore: Only for installed versions
         if isinstance(obj, _PILImage.Image):
             return 'PIL.Image', obj.mode, obj.size
     except (ImportError, Exception):
@@ -517,7 +504,7 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
 
     # PyAV video/audio frames
     try:
-        import av
+        import av # Type: Ignore: Only for installed versions
         if isinstance(obj, (av.VideoFrame, av.AudioFrame)):
             return 'av.Frame', type(obj).__name__, obj.pts
     except (ImportError, Exception):

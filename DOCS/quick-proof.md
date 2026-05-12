@@ -207,8 +207,10 @@ ENDURANCE RUN COMPLETE
 > with a specific index, and the index directs tokens to the appropriate worker based on tags.
 
 ```python
-@task_token_guard(operation_type='write_json_fast', 
-                  tags={'weight': 'light', 'storage_speed': 'FAST'})
+@task_token_guard(
+    operation_type='write_json_fast', 
+    tags={'weight': 'light', 'storage_speed': 'FAST'}
+)
 def write_json_fast(path, payload):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -219,8 +221,10 @@ def write_json_fast(path, payload):
         "keys": len(payload),
     }
 
-@task_token_guard(operation_type='append_log_slow', 
-                  tags={'weight': 'heavy', 'storage_speed': 'SLOW'})
+@task_token_guard(
+    operation_type='append_log_slow', 
+    tags={'weight': 'heavy', 'storage_speed': 'SLOW'}
+)
 def append_log_slow(path, message):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "a", encoding="utf-8") as f:
@@ -230,8 +234,10 @@ def append_log_slow(path, message):
         "chars": len(message),
     }
 
-@task_token_guard(operation_type='write_blob_moderate', 
-                  tags={'weight': 'medium', 'storage_speed': 'MODERATE'})
+@task_token_guard(
+    operation_type='write_blob_moderate', 
+    tags={'weight': 'medium', 'storage_speed': 'MODERATE'}
+)
 def write_blob_moderate(path, size_kb):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     blob = b"x" * (size_kb * 1024)
@@ -371,7 +377,10 @@ import time
 import random
 from operations_coordinator import task_token_guard
 
-@task_token_guard(operation_type='json_generation_heavy', tags={'weight': 'heavy'})
+@task_token_guard(
+    operation_type='json_generation_heavy', 
+    tags={'weight': 'heavy', 'storage_speed': 'MODERATE'}
+)
 def generate_complex_json(depth: int, index: int) -> dict:
     """
     Heavy JSON generation - CPU intensive.
@@ -564,7 +573,10 @@ def prime_operation(n):
             return False
     return True
 
-@task_token_guard(operation_type='append_log_slow', tags={'weight': 'heavy', 'storage_speed': 'SLOW'})
+@task_token_guard(
+    operation_type='append_log_slow', 
+    tags={'weight': 'heavy', 'storage_speed': 'SLOW'}
+)
 def append_log_slow(path, message):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "a", encoding="utf-8") as f:

@@ -684,7 +684,7 @@ async def _execute_token(self, token: TaskToken, worker_id: str, core_id: int):
     """
     # Transition to executing
     if not token.transition_state(TokenState.EXECUTING):
-        print(f"[{worker_id.upper()}] Failed to transition {token.token_id}")
+        tg_print('worker', f'{worker_id} failed to transition {token.token_id}', level='warn')
         return
 
     start_time = time.time()
@@ -692,23 +692,16 @@ async def _execute_token(self, token: TaskToken, worker_id: str, core_id: int):
 
     try:
         loop = asyncio.get_running_loop()
-        # This is now "partial" instead of lambda for better stability.
-        bound_func = partial(token.func, *token.args, **token.kwargs)
-        # We use run_in_executor to execute the task in a thread, 
-        # allowing us to manage concurrency and avoid blocking the event loop.
-        result = await loop.run_in_executor(None, bound_func) 
+        # Token execution is offloaded to a thread pool executer and looped through the  
+        # data `_execute_token_wrapped` for data locality. The token's wrapped callable  
+        # is executed in a thread to avoid blocking the event loop.
+        _execute_token_wrapped = partial(self._execute_token_wrapped, token) 
+        result = await loop.run_in_executor(None, _execute_token_wrapped)
         token.set_result(result)
         self.total_executed += 1
         success = True
 
-        print(f"[{worker_id.upper()}] ✓ Completed {token.token_id}")
-
-    except Exception as e:
-        # Failed!
-        token.set_error(e)
-        self.total_failed += 1
-        if self.result_verbose:
-            print(f"[{worker_id.upper()}] ✗ Failed {token.token_id}: {e}")
+        tg_print('worker', f'{worker_id} completed {token.token_id}', level='state')
 
     finally:
         execution_duration = time.time() - start_time
