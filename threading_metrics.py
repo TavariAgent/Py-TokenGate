@@ -171,7 +171,7 @@ _global_metrics: Optional[ThreadingMetrics] = None
 _global_lock = threading.Lock()
 
 
-def get_metrics() -> ThreadingMetrics | None:
+def get_metrics() -> ThreadingMetrics:
     """Return the process-global metrics instance, creating it if needed."""
     global _global_metrics
 
@@ -180,6 +180,7 @@ def get_metrics() -> ThreadingMetrics | None:
             if _global_metrics is None:
                 _global_metrics = ThreadingMetrics()
 
+    assert _global_metrics is not None
     return _global_metrics
 
 

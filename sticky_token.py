@@ -47,7 +47,7 @@ class OperationMarker:
 
     __slots__ = ("core_id",)
 
-    def __init__(self, core_id: int) -> None:
+    def __init__(self, core_id: int):
         self.core_id = core_id
 
 
@@ -78,7 +78,7 @@ class StickyTokenRegistry:
     # Public API
     # ------------------------------------------------------------------
 
-    def mark(self, op_name: str, args: tuple, core_id: int) -> int:
+    def mark(self, op_name: str, args: tuple[Any, ...], core_id: int) -> int:
         """Record the core for (op_name, frozen-args) and return the core to use.
 
         If no marker exists yet, one is created for *core_id* and *core_id* is

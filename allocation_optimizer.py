@@ -256,8 +256,7 @@ class AllocationOptimizer:
             operation_name: str,
             success: bool,
             new_confidence: float,
-            actual_allocation_used_mb: Optional[int] = None
-    ) -> None:
+    ):
         """
         Record execution outcome and update confidence-boundary state.
 

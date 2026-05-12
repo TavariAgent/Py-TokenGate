@@ -14,16 +14,14 @@ Features:
 - Guard House heatmap
 """
 import os
-import sys
-import json
-import time
 import threading
+import time
+from functools import wraps
 from pathlib import Path
 from typing import Optional
 
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
-from flask_socketio import SocketIO, emit, disconnect
-from functools import wraps
+from flask_socketio import SocketIO, emit
 
 try:
     from ..operations_coordinator import OperationsCoordinator, get_global_coordinator

@@ -267,7 +267,7 @@ _global_storage_throttle: Optional[StorageThrottleManager] = None
 _storage_lock = threading.Lock()
 
 
-def get_storage_throttle() -> StorageThrottleManager | None:
+def get_storage_throttle() -> StorageThrottleManager:
     """
     Get the global storage throttle manager.
 
@@ -280,6 +280,7 @@ def get_storage_throttle() -> StorageThrottleManager | None:
             if _global_storage_throttle is None:
                 _global_storage_throttle = StorageThrottleManager()
 
+    assert _global_storage_throttle is not None
     return _global_storage_throttle
 
 

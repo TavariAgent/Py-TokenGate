@@ -187,6 +187,12 @@ class HashConductor:
         # seed is already stamped — no need to write it again
         with self._lock:
             if seed not in self._cores:
+                tg_print(
+                    "conductor",
+                    f"Child fallthrough  token={getattr(token, 'token_id', '?')}  "
+                    f"seed={seed[:12]}…  DOMAIN GONE — returning candidate_core={candidate_core}",
+                    level="warn",
+                )
                 return candidate_core
             core_id = self._cores[seed]
 
@@ -199,7 +205,7 @@ class HashConductor:
         )
         return core_id
 
-    def pre_register(self, seed: str) -> None:
+    def pre_register(self, seed: str):
         """Increment pending count at child token creation time.
 
         Called from task_token_guard while still in the executor thread,
@@ -229,7 +235,7 @@ class HashConductor:
         """Clear the active seed after the lead function returns."""
         _set_active_seed(None)
 
-    def on_complete(self, token: TaskToken) -> None:
+    def on_complete(self, token: TaskToken):
         """Decrement the pending count for a token's seed.
 
         When the count reaches zero (lead + all children done) the seed
@@ -238,7 +244,9 @@ class HashConductor:
         seed = token.metadata.tags.get("conductor_seed")
         if not seed:
             return
-        seed: str = seed  # type narrowing for mypy
+
+        # Added runtime guard to prevent stampping into seeds.
+        assert isinstance(seed, str), f"conductor_seed tag must be str, got {type(seed)}"
 
         release = False
         with self._lock:

@@ -22,7 +22,7 @@ from .prometheus_convergence import PrometheusConvergenceEngine
 from .threading_metrics import get_metrics
 from .token_system import global_token_pool
 from .topology_detector import TopologyDetector
-from .tg_print import tg_print, TGPrint
+from .tg_print import tg_print
 
 
 @dataclass
@@ -438,7 +438,7 @@ _global_coordinator: Optional[OperationsCoordinator] = None
 _coordinator_lock = threading.Lock()
 
 
-def get_global_coordinator() -> OperationsCoordinator | None:
+def get_global_coordinator() -> OperationsCoordinator:
     """Return the process-global coordinator, creating and starting it if needed.
 
     This function exists primarily to support decorator-driven submission paths
@@ -451,6 +451,8 @@ def get_global_coordinator() -> OperationsCoordinator | None:
             if _global_coordinator is None:
                 _global_coordinator = OperationsCoordinator()
                 _global_coordinator.start()
+
+    assert _global_coordinator is not None  # narrows Optional → concrete type
     return _global_coordinator
 
 

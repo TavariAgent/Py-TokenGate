@@ -22,7 +22,7 @@ from typing import Dict, Optional, Callable, Any
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, current_dir)
 
-from .token_system import global_token_pool, TaskToken, TokenMetadata, TokenState
+from .token_system import global_token_pool, TaskToken, TokenMetadata
 from .code_inspector import CodeInspector, ComplexityLevel
 from .allocation_optimizer import AllocationOptimizer
 from .tg_print import tg_print
@@ -145,7 +145,7 @@ class OverflowGuard:
             }
 
         # Initialize operation in optimizer
-        operation_name = token.metadata.operation_type
+        operation_name = token.metadata.operation_type or "unnamed"
         self.optimizer.initialize_operation(operation_name, metrics)
 
         # Get allocation recommendation
@@ -165,7 +165,13 @@ class OverflowGuard:
             'confidence': allocation['confidence']
         }
 
-    def should_retry(self, token_id: str, execution_duration: float, success: bool, operation_type: str = None, token_tags: dict = None) -> bool:
+    def should_retry(
+        self, token_id: str,
+        execution_duration: float,
+        success: bool,
+        operation_type: Optional[str] = None,
+        token_tags: dict = None
+    ) -> bool:
         """
         Determine if a task should be retried.
 
@@ -215,7 +221,7 @@ class OverflowGuard:
         # First failure - can create backup
         return True
 
-    def create_retry_token(self, original_token: TaskToken, execution_duration: float) -> Optional[TaskToken] | None:
+    def create_retry_token(self, original_token: TaskToken) -> Optional[TaskToken]:
         """Create a retry token with bumped allocation under the active retry policy."""
         with self._backup_lock:
             token_id = original_token.token_id
@@ -242,7 +248,7 @@ class OverflowGuard:
             else:
                 # First failure - create backup entry
                 # Get complexity from optimizer (or inspect again)
-                operation_type = original_token.metadata.operation_type
+                operation_type: str = original_token.metadata.operation_type or "unnamed"
 
                 # Try to get metrics from optimizer
                 op_stats = self.optimizer.get_operation_stats(operation_type)

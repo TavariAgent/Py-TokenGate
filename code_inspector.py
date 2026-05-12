@@ -203,16 +203,6 @@ class CodeInspector:
         external_calls = []
         names = set(code.co_names)
 
-        # Common expensive operations
-        expensive_patterns = [
-            'json', 'pickle', 'marshal',  # Serialization
-            'requests', 'urllib', 'http',  # Network
-            'open', 'read', 'write',  # File I/O
-            'numpy', 'pandas', 'scipy',  # Heavy computation
-            'compile', 'exec', 'eval',  # Dynamic execution
-            'time.sleep', 'asyncio.sleep'  # Blocking operations
-        ]
-
         for name in names:
             # Track all names but flag expensive ones
             external_calls.append(name)

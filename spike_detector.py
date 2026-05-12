@@ -147,9 +147,8 @@ class SpikeDetector:
             return False, 0.0, f"Insufficient samples ({reputation.total_attempts}/{self.min_samples})"
 
         # Get historical average complexity
-        historical_avg = getattr(reputation, 'avg_complexity_score', None)
+        historical_avg: Optional[float] = getattr(reputation, 'avg_complexity_score', None)
 
-        # No complexity tracking yet (allow execution)
         if historical_avg is None or historical_avg == 0.0:
             return False, 0.0, "No complexity baseline"
 

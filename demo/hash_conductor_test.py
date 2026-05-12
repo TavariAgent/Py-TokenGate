@@ -142,6 +142,14 @@ def run_hash_conductor_test(coordinator: Optional[Any] = None) -> None:
             if bad_seeds:
                 print(f"         children with wrong seed: {[s[:12]+'…' for s in bad_seeds if s]}")
 
+        # Instead of just listing bad cores, show the full picture
+        if not (core_ok and seed_ok):
+            misses += 1
+            print(f"  MISS  lead_n={lead_n}  expected_core={lead_core}  seed={seed_short}")
+            for i, c in enumerate(children):
+                status = "✓" if c["core"] == lead_core else "✗"
+                print(f"         child[{i}]  {status}  core={c['core']}  expected={lead_core}")
+
     # ── Leak check ─────────────────────────────────────────────────────────────
     snapshot = conductor.snapshot()
     leaked   = len(snapshot)

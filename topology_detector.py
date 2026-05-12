@@ -121,7 +121,7 @@ class TopologyDetector:
         }
 
     @staticmethod
-    def print_topology(topology: CPUTopology) -> None:
+    def print_topology(topology: CPUTopology):
         """Print human-readable topology information."""
         print("CPU Topology Detected:")
         print(f"  Physical cores: {topology.physical_cores}")

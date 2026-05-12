@@ -100,14 +100,14 @@ class TaskToken(Generic[T]):
         self.metadata = metadata
 
         # State management
-        self.on_state_change = None
-        self.state = TokenState.CREATED
+        self.on_state_change: Optional[Callable[[TaskToken[Any], TokenState, TokenState], None]] = None
+        self.state: TokenState = TokenState.CREATED
         self._state_lock = threading.Lock()
 
         # Result delivery
         self._result_future: Future[T] = Future()
-        self._result = None
-        self._error = None
+        self._result: Optional[T] = None
+        self._error: Optional[Exception] = None
 
         # Admin control
         self._kill_requested = threading.Event()
@@ -504,10 +504,10 @@ class TokenPool:
     """
     def __init__(self):
         self.quarantine_mgr = None
-        self.tokens: Dict[str, TaskToken] = {}
+        self.tokens: Dict[str, TaskToken[Any]] = {}
         self._lock = threading.Lock()
 
-        self._token_queue: Optional[asyncio.Queue['TaskToken']] = None
+        self._token_queue: Optional[asyncio.Queue[TaskToken[Any]]] = None
         self._event_loop: Optional[asyncio.AbstractEventLoop] = None
         self.default_on_state_change = None
 
@@ -572,34 +572,39 @@ class TokenPool:
 
         return token
 
-    async def get_next_token(self) -> TaskToken[T] | None:
+    async def get_next_token(self) -> "TaskToken[Any]": # Type: Ignore this might be lint (needs revision.)
         """Wait for and return the next token eligible for admission.
 
         If the pool is globally paused, this waits. If a specific token's
         operation_type is paused, it routes it to a holding area and grabs the next.
         """
+        assert self._token_queue is not None, "TokenPool not started — call coordinator.start() first"
+
         while True:
             # Wait if globally paused
             while not self._paused.is_set():
                 await asyncio.sleep(0.1)
 
             # FIFO
-            token = await self._token_queue.get()
+            token: TaskToken[Any] = await self._token_queue.get()
 
             # 1. Skip if it was drained/killed while waiting in the queue
             if token.is_killed() or token.state == TokenState.KILLED:
                 continue
 
+            op_type = token.metadata.operation_type  # still Optional[str] here
+
             # 2. Check if this specific operation is paused
             with self._lock:
-                is_op_paused = token.metadata.operation_type in self._paused_operations
+                is_op_paused = op_type is not None and op_type in self._paused_operations
 
             if is_op_paused:
+                assert op_type is not None  # narrowed: str from here down
                 # Route to holding area and loop to get the next token
                 with self._lock:
-                    if token.metadata.operation_type not in self._paused_holding:
-                        self._paused_holding[token.metadata.operation_type] = []
-                    self._paused_holding[token.metadata.operation_type].append(token)
+                    if op_type not in self._paused_holding:
+                        self._paused_holding[op_type] = []
+                    self._paused_holding[op_type].append(token)
                 continue
 
             return token

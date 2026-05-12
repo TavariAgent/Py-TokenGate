@@ -24,7 +24,7 @@ from .token_system import TaskToken, TokenState
 from .admission_gate import WorkerTaskQueue
 from .core_affinity_queue import TaskWeight
 from .sticky_token import sticky_registry
-from .hash_conductor import conductor, get_active_seed
+from .hash_conductor import conductor
 from .tg_print import tg_print
 
 
@@ -259,10 +259,12 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
 
             # Release the sticky-core pin so the next token for this
             # (op, args) key can be freely routed again.
-            sticky_registry.unmark(
-                token.metadata.tags.get("sticky_anchor") or token.metadata.operation_type or "",
-                token.args,
+            sticky_key: str = (
+                    token.metadata.tags.get("sticky_anchor")
+                    or token.metadata.operation_type
+                    or ""
             )
+            sticky_registry.unmark(sticky_key, token.args)
 
     async def _execute_token_with_metrics(self, token: "TaskToken", worker_id: str, core_id: int):
         """Execute one token while updating worker-state and outcome metrics."""
@@ -590,7 +592,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         }
 
     @staticmethod
-    def _put_routing_block(token, op_type, candidate_core):
+    def _put_routing_block(token: TaskToken, op_type: str, candidate_core: int) -> int:
         """
         Drop-in replacement for the sticky_registry.mark() call in put().
         Shows the routing decision tree for the conductor integration.
@@ -614,6 +616,12 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
                 route_args = token.args if external_calls else ()
                 core_id = sticky_registry.mark(sticky_name, route_args, candidate_core)
             else:
+                tg_print(
+                    "conductor",
+                    f"No routing  token={getattr(token, 'token_id', '?')}  "
+                    f"op={op_type}  no seed, no sticky — free routing",
+                    level="warn",
+                )
                 core_id = candidate_core
 
         return core_id
