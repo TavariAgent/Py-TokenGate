@@ -609,9 +609,13 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
             core_id = conductor.register_child(token, candidate_core)
 
         else:
-            # No conductor involvement — normal sticky routing.
-            sticky_name = token.metadata.tags.get("sticky_anchor") or op_type
-            core_id = sticky_registry.mark(sticky_name, token.args, candidate_core)
+            has_sticky = "sticky_anchor" in token.metadata.tags
+            if external_calls or has_sticky:
+                sticky_name = token.metadata.tags.get("sticky_anchor") or op_type
+                route_args = token.args if external_calls else ()
+                core_id = sticky_registry.mark(sticky_name, route_args, candidate_core)
+            else:
+                core_id = candidate_core
 
         return core_id
 

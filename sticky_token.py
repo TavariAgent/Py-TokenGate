@@ -15,6 +15,7 @@ the next token for that key to be freely routed again.
 import threading
 from typing import Any, Dict, Optional, Tuple
 
+from .unhashable_checker import make_hashable, safe_args_key
 from .tg_print import tg_print
 
 
@@ -34,7 +35,7 @@ def freeze(val: Any) -> Any:
         return tuple(freeze(v) for v in val)
     if isinstance(val, set):
         return frozenset(freeze(v) for v in val)
-    return val
+    return make_hashable(val)
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +88,7 @@ class StickyTokenRegistry:
         completed), the *existing* core_id is returned — the caller must route
         to that core to honour the sticky contract.
         """
-        key = self._make_key(op_name, args)
+        key = (op_name, safe_args_key(args))
         with self._lock:
             if key not in self._markers:
                 self._markers[key] = OperationMarker(core_id)
@@ -142,7 +143,7 @@ class StickyTokenRegistry:
 
     @staticmethod
     def _make_key(op_name: str, args: tuple) -> _InflightKey:
-        return (op_name, freeze(args))
+        return op_name, freeze(args)
 
 
 # ---------------------------------------------------------------------------

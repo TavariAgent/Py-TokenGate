@@ -185,4 +185,7 @@ concurrency management system using tokens. While it is currently functional, th
 improvement and optimization. I encourage users to explore the project, provide feedback, and contribute 
 to its development. 📦 🚀
 
-To quickly reach out go here and drop a review in the feedback section: [Tavari](https://www.tavari.online)
+To quickly reach out go here and drop a review in the feedback section: [Tavari](https://www.tavari.online)  
+
+I see a couple hundred of you out there, if this has been fun, or useful or even just something you want to   
+see grow, please leave a star on GitHub, it helps me spread the freedom of TokenGate

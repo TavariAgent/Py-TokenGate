@@ -2,6 +2,8 @@
 
 Welcome to the TokenGate repository. 
 
+### (Unhashable operations fixed as of v3.3.3.0-beta)
+
 > Read BETA.md for the quickest entry point and overview of the system.  
 > If you're not sure about the system and want to see it in action, go to  
 > SETUP.md for a quick demo and walkthrough of the system under varous loads.
