@@ -572,7 +572,7 @@ class TokenPool:
 
         return token
 
-    async def get_next_token(self) -> "TaskToken[Any]": # Type: Ignore this might be lint (needs revision.)
+    async def get_next_token(self):
         """Wait for and return the next token eligible for admission.
 
         If the pool is globally paused, this waits. If a specific token's
@@ -586,7 +586,14 @@ class TokenPool:
                 await asyncio.sleep(0.1)
 
             # FIFO
-            token: TaskToken[Any] = await self._token_queue.get()
+            token = await self._token_queue.get()
+
+            # 0.5. Check gaurd for broken objects.
+            # Guard: confirms the dequeued object is a genuine TokenGate token.
+            # Handles None, accidental foreign enqueue, and satisfies the type checker.
+            # isinstance narrows the type fully from this point down.
+            if not isinstance(token, TaskToken):
+                continue
 
             # 1. Skip if it was drained/killed while waiting in the queue
             if token.is_killed() or token.state == TokenState.KILLED:

@@ -19,16 +19,16 @@ from .tg_print import tg_print
 
 class TaskWeight(Enum):
     """Routing weight classes used by the affinity policy."""
-    HEAVY = "heavy"  # High difficulty work gets Core 1
+    HEAVY  = "heavy"   # High difficulty work gets Core 1
     MEDIUM = "medium"  # Balanced work gets Core 2+
-    LIGHT = "light"  # Simple work gets Core 3+
+    LIGHT  = "light"   # Simple work gets Core 3+
 
 
 @dataclass
 class CorePreference:
     """Allowed-core set and preferred starting core for one weight class."""
-    allowed_cores: List[int]  # Cores this weight can use
-    preferred_core: int  # First choice
+    allowed_cores: List[int]   # Cores this weight can use
+    preferred_core: int        # First choice
 
 
 class CoreAffinityPolicy:
@@ -48,36 +48,21 @@ class CoreAffinityPolicy:
         heavy_cores = list(range(1, self.num_cores + 1))
 
         # Medium starts at Core 2 (NEVER Core 1)
-        medium_cores = list(range(2, self.num_cores + 1)) if self.num_cores >= 2 else []
-        if not medium_cores:
-            # Fallback for 1-core system (shouldn't happen but handle it)
-            medium_cores = [1]
+        medium_cores = list(range(2, self.num_cores + 1)) if self.num_cores >= 2 else [1]
 
         # Light starts at Core 3 (NEVER Cores 1-2)
-        light_cores = list(range(3, self.num_cores + 1)) if self.num_cores >= 3 else []
-        if not light_cores:
-            # Fallback: use medium's cores
-            light_cores = medium_cores
+        light_cores  = list(range(3, self.num_cores + 1)) if self.num_cores >= 3 else medium_cores
 
         self.preferences = {
-            TaskWeight.HEAVY: CorePreference(
-                allowed_cores=heavy_cores,
-                preferred_core=heavy_cores[0]
-            ),
-            TaskWeight.MEDIUM: CorePreference(
-                allowed_cores=medium_cores,
-                preferred_core=medium_cores[0]
-            ),
-            TaskWeight.LIGHT: CorePreference(
-                allowed_cores=light_cores,
-                preferred_core=light_cores[0]
-            )
+            TaskWeight.HEAVY:  CorePreference(allowed_cores=heavy_cores,  preferred_core=heavy_cores[0]),
+            TaskWeight.MEDIUM: CorePreference(allowed_cores=medium_cores, preferred_core=medium_cores[0]),
+            TaskWeight.LIGHT:  CorePreference(allowed_cores=light_cores,  preferred_core=light_cores[0]),
         }
 
         tg_print('affinity', f'Policy built for {self.num_cores} cores')
         tg_print('affinity', f'Heavy:  {heavy_cores}  preferred={heavy_cores[0]}')
-        tg_print('affinity', f'Medium: {medium_cores}  preferred={medium_cores[0] if medium_cores else "N/A"}')
-        tg_print('affinity', f'Light:  {light_cores}  preferred={light_cores[0] if light_cores else "N/A"}')
+        tg_print('affinity', f'Medium: {medium_cores}  preferred={medium_cores[0]}')
+        tg_print('affinity', f'Light:  {light_cores}  preferred={light_cores[0]}')
 
     def get_preference_chain(self, weight: TaskWeight) -> List[int]:
         """Return allowed cores for the given weight in preference order."""
@@ -128,43 +113,31 @@ class CoreAffinityQueue:
 
     def get_affinity_report(self) -> dict:
         """Return per-core weight distribution percentages and totals."""
-        report = {}
-
-        for core_id, counts in self._affinity_counts.items():
-            total = sum(counts.values())
-
-            if total > 0:
-                # Calculate percentages
-                report[f'core_{core_id}'] = {
-                    'heavy': (counts['heavy'] / total) * 100,
-                    'medium': (counts['medium'] / total) * 100,
-                    'light': (counts['light'] / total) * 100,
-                    'total_tasks': total
+        return {
+            f'core_{core_id}': (
+                {
+                    'heavy':       (counts['heavy']  / total) * 100,
+                    'medium':      (counts['medium'] / total) * 100,
+                    'light':       (counts['light']  / total) * 100,
+                    'total_tasks': total,
                 }
-            else:
-                # No tasks yet
-                report[f'core_{core_id}'] = {
-                    'heavy': 0.0,
-                    'medium': 0.0,
-                    'light': 0.0,
-                    'total_tasks': 0
-                }
-
-        return report
+                if (total := sum(counts.values())) > 0 else
+                {'heavy': 0.0, 'medium': 0.0, 'light': 0.0, 'total_tasks': 0}
+            )
+            for core_id, counts in self._affinity_counts.items()
+        }
 
     def get_stats(self) -> dict:
         """Return a composite snapshot of affinity configuration and routing totals."""
-        affinity_report = self.get_affinity_report()
-
         return {
-            'num_cores': self.num_cores,
-            'workers_per_core': self.workers_per_core,
-            'total_routed': self.total_routed,
-            'routing_failures': self.routing_failures,
-            'affinity_distribution': affinity_report
+            'num_cores':              self.num_cores,
+            'workers_per_core':       self.workers_per_core,
+            'total_routed':           self.total_routed,
+            'routing_failures':       self.routing_failures,
+            'affinity_distribution':  self.get_affinity_report(),
         }
 
-    # TODO: Add this too the dashboard in a live core viewer
+    # TODO: Add this to the dashboard in a live core viewer
     def print_affinity_report(self):
         """Print a human-readable per-core affinity distribution report."""
         print()
@@ -172,16 +145,10 @@ class CoreAffinityQueue:
         print("CORE AFFINITY REPORT")
         print("=" * 70)
 
-        # Get report dict
         report = self.get_affinity_report()
 
-        # Print each core's stats
         for core_id in range(1, self.num_cores + 1):
-            core_key = f'core_{core_id}'
-
-            if core_key in report:
-                stats = report[core_key]
-
+            if (stats := report.get(f'core_{core_id}')):
                 print(f"\nCore {core_id}:")
                 print(f"  Heavy:  {stats['heavy']:>5.1f}%")
                 print(f"  Medium: {stats['medium']:>5.1f}%")

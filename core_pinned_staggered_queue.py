@@ -25,6 +25,7 @@ from .admission_gate import WorkerTaskQueue
 from .core_affinity_queue import TaskWeight
 from .sticky_token import sticky_registry
 from .hash_conductor import conductor
+from .unhashable_checker import HashPolicy, fast_make_hashable
 from .tg_print import tg_print
 
 
@@ -113,20 +114,8 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
 
     def _choose_local_worker_least_loaded(self, core_id: int) -> int:
         """Return the active local worker with the smallest current mailbox depth."""
-        active = int(self.core_patterns.get(core_id, self.workers_per_core))
-        active = max(1, min(self.workers_per_core, active))
-
-        best_local = 0
-        best_len = 1 << 60
-
-        for local_i in range(active):
-            q = self.mailboxes[(core_id, local_i)]
-            qlen = q.qsize()
-            if qlen < best_len:
-                best_len = qlen
-                best_local = local_i
-
-        return best_local
+        active = max(1, min(self.workers_per_core, int(self.core_patterns.get(core_id, self.workers_per_core))))
+        return min(range(active), key=lambda i: self.mailboxes[(core_id, i)].qsize())
 
     def set_core_pattern(self, core_id: int, pattern_value: int):
         """Set the number of active mailbox workers for a core."""
@@ -307,7 +296,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
 
         elif weight == TaskWeight.MEDIUM:
             # Cores 2+ (never Core 1)
-            if self.num_cores >= 2: # Medium core 2+
+            if self.num_cores >= 2:
                 return list(range(2, self.num_cores + 1))
             else:
                 # Fallback for single-core systems
@@ -324,21 +313,23 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
                 # Fallback for single-core
                 return [1]
 
+    # Weight string → enum — O(1) lookup, replaces the if/elif chain
+    _WEIGHT_MAP: Dict[str, TaskWeight] = {
+        'heavy': TaskWeight.HEAVY,
+        'light': TaskWeight.LIGHT,
+    }
+
     @staticmethod
     def classify_token_weight(token: TaskToken) -> TaskWeight:
         """Infer routing weight from token tags or operation-type naming.
 
         Explicit weight tags take precedence over operation-type heuristics.
         """
-        # Check tags first
+        # Check tags first — O(1) map lookup, default to MEDIUM on miss
         if 'weight' in token.metadata.tags:
-            weight_str = token.metadata.tags['weight'].lower()
-            if weight_str == 'heavy':
-                return TaskWeight.HEAVY
-            elif weight_str == 'light':
-                return TaskWeight.LIGHT
-            else:
-                return TaskWeight.MEDIUM
+            return CorePinnedStaggeredQueue._WEIGHT_MAP.get(
+                token.metadata.tags['weight'].lower(), TaskWeight.MEDIUM
+            )
 
         # Check operation_type suffix
         op_type = token.metadata.operation_type.lower()
@@ -352,30 +343,14 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
 
     def choose_worker_for_core(self, core_id: int) -> int:
         """Choose the least-loaded active worker slot for the given core."""
-        active = self.core_patterns.get(core_id, self.workers_per_core)  # pattern lock (2/3/4)
-        # pick least-loaded among active workers
-        best_i = 0
-        best_len = 10 ** 18
-        base = (core_id - 1) * self.workers_per_core
-        for i in range(active):
-            wid = base + i
-            qlen = self.worker_queue_sizes[wid]  # track counts (fast)
-            if qlen < best_len:
-                best_len = qlen
-                best_i = i
-        return best_i
+        active = self.core_patterns.get(core_id, self.workers_per_core)
+        base   = (core_id - 1) * self.workers_per_core
+        return min(range(active), key=lambda i: self.worker_queue_sizes[base + i])
 
     def assign_worker_positions(self, worker_id: str, worker_index: int, core_id: int):
         """Precompute the staggered global positions owned by one worker."""
-        positions = []
-
-        # Base position for this worker
         base = (core_id - 1) * self.workers_per_core + (worker_index % self.workers_per_core)
-
-        # Pre-allocate positions (every total_workers)
-        for cycle in range(100):  # 1000 cycles
-            positions.append(base + (cycle * self.total_workers))
-
+        positions = [base + (cycle * self.total_workers) for cycle in range(100)]
         self.worker_positions[worker_id] = positions
 
         tg_print('worker', f'Worker {worker_id} core={core_id}  '
@@ -465,8 +440,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         else:
             local_i = candidate_local
             # Pattern lock: only active locals are eligible
-            active = int(self.core_patterns.get(core_id, self.workers_per_core))
-            active = max(1, min(self.workers_per_core, active))
+            active = max(1, min(self.workers_per_core, int(self.core_patterns.get(core_id, self.workers_per_core))))
             if local_i >= active:
                 local_i = self._choose_local_worker_least_loaded(core_id)
 
@@ -597,6 +571,23 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         Drop-in replacement for the sticky_registry.mark() call in put().
         Shows the routing decision tree for the conductor integration.
         """
+        # ── Resolve hash policy ───────────────────────────────────────────
+        _policy_raw = token.metadata.tags.get("hash_policy", HashPolicy.STANDARD)
+        if isinstance(_policy_raw, str):
+            try:
+                hash_policy = HashPolicy(_policy_raw)
+            except ValueError:
+                tg_print(
+                    "conductor",
+                    f"Unknown hash_policy '{_policy_raw}' on token="
+                    f"{getattr(token, 'token_id', '?')} — defaulting to STANDARD",
+                    level="warn",
+                )
+                hash_policy = HashPolicy.STANDARD
+        else:
+            hash_policy = _policy_raw
+
+        # ── Routing decision tree ─────────────────────────────────────────
         external_calls = (
                 getattr(token.metadata, "external_calls", None)
                 or token.metadata.tags.get("external_calls")
@@ -610,10 +601,19 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
             core_id = conductor.register_child(token, candidate_core)
 
         else:
+            # external_calls is falsy by this point — only has_sticky matters
             has_sticky = "sticky_anchor" in token.metadata.tags
-            if external_calls or has_sticky:
+            if has_sticky:
                 sticky_name = token.metadata.tags.get("sticky_anchor") or op_type
-                route_args = token.args if external_calls else ()
+
+                # Gate route_args on hash policy
+                if hash_policy == HashPolicy.NONE:
+                    route_args = ()
+                elif hash_policy == HashPolicy.FAST:
+                    route_args = tuple(fast_make_hashable(a) for a in token.args)
+                else:  # STANDARD or FULL — current behaviour, unchanged
+                    route_args = token.args
+
                 core_id = sticky_registry.mark(sticky_name, route_args, candidate_core)
             else:
                 tg_print(

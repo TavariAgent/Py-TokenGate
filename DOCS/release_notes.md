@@ -1,217 +1,320 @@
-# TokenGate — Release Notes
+# TokenGate — Optimization Pass Release Notes
 
-## Hash Conductor & Sticky Token Registry
+## Summary
 
-This release introduces two systems that work together to anchor token execution  
-to stable core domains for the full lifetime of a call chain. The result is  
-deterministic routing, zero cross-domain data races, and measurably better  
-behaviour under saturated load conditions.  
+This pass targets the token submission hot path — the sequence of operations
+between a caller invoking a decorated function and the token landing in a
+worker mailbox. No routing contracts, no execution semantics, and no public
+API signatures were changed. Also added a runtime gaurd for tokens inserted
+into the coordinator. All improvements are opt-in or transparent.
 
 ---
 
-## What Changed
+## Benchmark Comparison
 
-### StickyTokenRegistry
+| Metric                        | Before       | After         | Delta      |
+|-------------------------------|--------------|---------------|------------|
+| Total wall time (131k tokens) | 83.506s      | 42.337s       | −49%       |
+| Active execution time         | ~83s         | 4.673s        | −94%       |
+| Avg latency / token           | 0.351ms      | 0.086ms       | −75%       |
+| Peak concurrency ratio        | 3.15×        | 49.22×        | +15.6×     |
+| Peak overlap ratio            | 46.09×       | 47.39×        | maintained |
+| Peak single-wave throughput   | ~3,368 tok/s | ~64,754 tok/s | ~19×       |
+| Sustained throughput          | ~1,569 tok/s | ~28,046 tok/s | ~18×       |
 
-Tokens carrying the same `(operation_type, args)` key are now pinned to the  
-core that first receives them. Any later token arriving with the same key is  
-redirected to that core automatically. The pin releases when the token  
-completes, freeing the next submission to route normally.  
+The concurrency jump from 3× to 49× indicates the submission path was the
+real ceiling. Workers were idle-waiting on routing overhead. Once that
+overhead was removed the thread pool expressed its actual capacity.
 
-A `sticky_anchor` tag can be added to any decorator to give the sticky key an  
-explicit name, independent of operation type.  
+---
+
+## Throughput Reporting — How to Read the Numbers
+
+The benchmark reports four throughput figures. Each measures something
+distinct and they should not be compared directly without understanding
+what each one counts.
+
+**Important:** All mean calculations are derived from accumulated token
+totals and elapsed time totals across waves — they are **not** arithmetic
+averages of independent per-wave unit rates. Reading them as per-wave
+averages will make them appear inconsistent with wall time. They are not.
+
+| Metric                  | Formula                               | What it measures                                                                                                                                           |
+|-------------------------|---------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Sustained**           | `total_tokens / Σ wave_elapsed`       | Volume-weighted reality. Dominated by the largest waves which carry the most tokens. The honest number for full-workload throughput.                       |
+| **Peak**                | `max(tokens_i / elapsed_i)`           | Best single-wave rate. Reflects the sweet-spot batch size where parallelism is fullest and scheduling overhead is smallest.                                |
+| **Token-weighted mean** | `Σ(rate_i × tokens_i) / total_tokens` | Each token votes equally on the average rate. Sits between sustained and peak — useful for understanding where the system spends most of its token-budget. |
+| **Arithmetic mean**     | `Σ rate_i / N`                        | Each wave votes equally. Small fast waves inflate this significantly. Included for completeness but the least representative of real workload behaviour.   |
+
+**Why sustained and wall time appear inconsistent:**
+
+Wall time includes 15 × 0.05s = 0.75s of deliberate inter-wave sleep plus
+event loop scheduling gaps and print overhead. Active time is the raw sum of
+`asyncio.gather` spans only. The `tok/s` figure in each wave row and in the
+summary is always based on active time. Wall time is reported separately so
+the two are never conflated.
+
+**Example from the final benchmark run:**
+
+```
+Waves 13–15:  114,688 tokens / 4.266s  =  ~26,900 tok/s  ← 87% of all volume
+Waves  1–12:   16,380 tokens / 0.407s  =  ~40,200 tok/s  ← 13% of all volume
+Combined:      131,068 tokens / 4.673s  =  ~28,046 tok/s  ← sustained (correct)
+```
+
+The sustained rate is pulled toward the large-wave rate because large waves
+dominate the token count. This is the correct and expected result.
+
+---
+
+## Changes
+
+### 1. `unhashable_checker.py` — O(1) Type Dispatch
+
+**Problem:** `make_hashable` walked a 23-layer `isinstance` chain on every
+unhashable value, including common exact types like `dict`, `list`, and
+`np.ndarray`.
+
+**Change:** Added `_DISPATCH: dict` populated once at module load by
+`_build_dispatch()`. At call time, a single `_DISPATCH.get(type(obj))`
+lookup short-circuits to the correct handler for registered exact types.
+Subclass misses fall through to the existing `isinstance` chain — no
+coverage regression.
+
+Registered at load time: `dict`, `list`, `set`, `bytearray`, `memoryview`,
+`slice`, `array.array`, `deque`, `OrderedDict`, `defaultdict`, `Counter`,
+`ChainMap`, and optionally `np.ndarray`, `pd.DataFrame`, `pd.Series`,
+`pd.MultiIndex`, `pd.Index`, `pd.Categorical`, `torch.Tensor`, `cp.ndarray`,
+`PIL.Image`.
+
+**Fast path fix:** The `hash()` fast path now catches `(TypeError,
+RuntimeError)` instead of `TypeError` only. Non-scalar `torch.Tensor` raises
+`RuntimeError` from `hash()` and previously slipped through to the tensor
+handler at layer 6. This closes that gap consistently with `is_hashable`.
+
+---
+
+### 2. `unhashable_checker.py` — `HashPolicy` Enum
+
+**Problem:** All tokens paid the full `make_hashable` pipeline cost at
+submission time regardless of whether their operation used sticky routing
+or conductor domain anchoring.
+
+**Change:** Added `HashPolicy` enum with four levels:
+
+| Value      | Behaviour                                                                                    |
+|------------|----------------------------------------------------------------------------------------------|
+| `NONE`     | No arg hashing. `route_args` is always `()`. Free routing only.                              |
+| `FAST`     | Builtins and stdlib only (layers 1–3). Unknown types get identity routing `(type_name, id)`. |
+| `STANDARD` | Full `make_hashable` pipeline. Default — unchanged behaviour.                                |
+| `FULL`     | Same as `STANDARD`. Reserved for explicit subclass-fallthrough intent.                       |
+
+Set per-operation via decorator tag:
+
+```python
+@task_token_guard(
+    operation_type="conductor_lead",
+    tags={"weight": "medium",
+          "hash_policy": HashPolicy.FAST,
+          "digest_policy": DigestPolicy.FAST,
+          "external_calls": ["conductor_child"]},
+)
+def my_function(...): ...
+```
+
+Default remains `STANDARD`. No existing code changes behaviour without opt-in.
+
+Also added `fast_make_hashable()` — the reduced pipeline used by
+`HashPolicy.FAST`. Covers layers 1–3, falls back to `(type_name, id)` for
+unrecognised types.
+
+---
+
+### 3. `unhashable_checker.py` — `DigestPolicy` Enum
+
+**Problem:** Conductor seed generation was hardwired to SHA-256 full 64-char
+hex on every lead token submission regardless of volume or lifetime
+requirements.
+
+**Change:** Added `DigestPolicy` enum with four levels:
+
+| Value     | Algorithm         | Output   | Collision space                          |
+|-----------|-------------------|----------|------------------------------------------|
+| `FULL`    | SHA-256           | 64 chars | 256-bit. Default, unchanged.             |
+| `SHORT`   | SHA-256 truncated | 16 chars | 64-bit. Safe at any realistic volume.    |
+| `FAST`    | BLAKE2s (8-byte)  | 16 chars | 64-bit. Lower compute cost than SHA-256. |
+| `MINIMAL` | SHA-256 truncated | 8 chars  | 32-bit. Low volume only.                 |
+
+**Collision semantics for `MINIMAL`:** Collisions merge two logical domain
+chains into a shared mailbox cluster. No data corruption occurs — the
+least-loaded mechanism compensates. Under saturation, heavy tasks may fall
+back from their primary core, shifting load distribution and inertly reducing
+variance. The effect is benign at low-to-mid token volume with short-lived
+leads: collisions reduce domain variance rather than causing failures, but
+they can force heavy tasks off their primary core under sustained call chains,
+inertly reducing performance at the affinity boundary.
+
+Set per-operation via decorator tag:
 
 ```python
 @task_token_guard(
     operation_type="my_op",
-    tags={"weight": "medium", "sticky_anchor": "op_token"},
+    tags={"digest_policy": DigestPolicy.FAST}
 )
-def my_operation(n: int) -> int:
-    ...
+def my_function(...): ...
 ```
 
-### HashConductor
+---
 
-Lead tokens — those decorated with `external_calls` — generate a SHA-256 seed  
-from their token ID and call list. That seed is pinned to a core domain. Any  
-token spawned during the lead's execution inherits the seed and is routed to the  
-same core automatically. The domain releases when the lead and all of its  
-children have completed.  
+### 4. `hash_conductor.py` — Policy-Aware `generate_seed` and `charge`
 
+**Change:** `generate_seed` now accepts a `DigestPolicy` parameter and
+branches to the appropriate algorithm. `charge` reads the `digest_policy`
+tag from the token's metadata, resolves string values to the enum with a
+fallback-to-FULL warning, and passes the resolved policy to `generate_seed`.
+
+The `tg_print` dispatch line in `charge` now includes `digest={policy.value}`
+for observability during mixed-policy runs.
+
+`snapshot()` `seed[:12]` truncation is safe for all four policies — Python's
+slice never raises on out-of-bounds, so an 8-char `MINIMAL` seed returns
+itself.
+
+---
+
+### 5. `sticky_token.py` — `freeze()` Empty-Args Guard
+
+**Problem:** `_make_key` called `freeze(args)` on every `mark()` and
+`unmark()`, including the majority path where `args = ()`. `freeze(())` is
+always `()` — the recursive call was redundant on every conductor
+`on_complete` → `unmark(seed, ())` call.
+
+**Change:**
 ```python
-@task_token_guard(
-    operation_type="lead_op",
-    tags={"weight": "medium", "external_calls": ["child_op"]},
-)
-def lead_operation(n: int) -> list:
-    return [child_op(n + i) for i in range(4)]
+return op_name, freeze(args) if args else ()
 ```
 
-No changes are required at call sites. Domain anchoring is fully automatic once  
-`external_calls` is declared.  
-
-### State Machine Cleanup
-
-`conductor.on_complete()` is now wired into `transition_state()` directly. Every  
-terminal state — `COMPLETED`, `FAILED`, `KILLED`, `TIMEOUT` — decrements the  
-pending count. Killed tokens are reported as completed for observability clarity.  
-Domains cannot leak regardless of how a token ends.  
+Zero overhead on the empty-args path which is now the dominant path through
+the conductor release cycle.
 
 ---
 
-## How Routing Works — Layer by Layer
+### 6. `core_pinned_staggered_queue.py` — Loop and Boolean Simplification
 
-Understanding the full path a token takes from call to completion.  
-
-**Layer 1 — Core Pinning Workers in Their Domains:**   
-Workers are fixed to a single core domain at startup and never move. `HEAVY`  
-tokens belong to Core 1. `MEDIUM` tokens belong to Core 2 and above. `LIGHT`  
-tokens belong to Core 3 and above. Workers sit in their domain and reach for  
-the nearest valid token. The queue is what moves — it forms itself into the  
-correct shape around the workers, routing tokens into position so each worker  
-always reaches the right one.  
-
-**Layer 2 — Token Creation & Metadata:**  
-`task_token_guard` intercepts the decorated call before execution. A `TaskToken`  
-is created carrying the function, arguments, operation type, and routing tags.  
-Complexity scoring runs once and is cached on the wrapper. If an active conductor  
-seed is present in the current executor thread, it is stamped onto the token's  
-metadata here, before any event loop crossing occurs.  
-
-**Layer 3 — Weight Classification & Position Assignment:**  
-The token is classified as `HEAVY`, `MEDIUM`, or `LIGHT` from its tags or  
-operation type name. A staggered global position is calculated from the per-core  
-position counter, respecting the active worker pattern for that core. The  
-candidate core and local worker index are derived from this position.  
-
-**Layer 4 — Sticky Token Enforcement:**  
-For standard tokens, `sticky_registry.mark()` is called with the resolved  
-`sticky_anchor` or operation type as the key. If a marker already exists for  
-this key, the token is redirected to the pinned core. If not, the candidate core  
-is pinned and returned. This prevents concurrent tokens with matching keys from  
-splitting across core domains.  
-
-**Layer 5 — Seed Generation:**  
-For lead tokens carrying `external_calls`, a SHA-256 digest is computed from the  
-token ID concatenated with a frozen representation of the call list. The full  
-64-character hex digest is used. Collision probability at any realistic token  
-volume is negligible. The seed is stored on the token's metadata tags.  
-
-**Layer 6 — Core Resolution:**  
-`_put_routing_block` makes the final routing decision. Lead tokens with  
-`external_calls` go to `conductor.charge()`. Tokens carrying a  
-`conductor_seed` tag go to `conductor.register_child()`. All other tokens  
-follow the normal sticky registry path. The returned `core_id` is written to  
-the token's `sticky_core` tag and used for all subsequent mailbox placements.  
-
-**Layer 7 — Charge Lead:**  
-`conductor.charge()` generates the seed, pins it to the candidate core via the  
-sticky registry, and opens the pending count at 1 for the lead itself. The seed  
-and core mapping are stored in the conductor's internal registry for the lifetime  
-of the chain.
-
-**Layer 8 — Pre-Register Children:**  
-When the lead function runs in the executor thread and spawns child tokens,  
-`task_token_guard` stamps the active seed onto each child at creation time and  
-calls `conductor.pre_register()` to increment the pending count immediately.  
-This increment happens before the child crosses to the event loop, ensuring the  
-domain stays alive even if the lead completes before the children reach `put()`.  
-
-**Layer 9 — Register Children:**  
-When the child arrives at `put()`, `register_child()` reads the seed from the  
-token tag and returns the pinned `core_id`. Position assignment still runs —  
-but now it runs with a `core_id` that is already established. `assign_position_for_token`  
-uses that known `core_id` to derive `local_i`, selecting the correct local worker  
-within the domain. The staggered counter is not bypassed; it is given the right  
-context to work from. This keeps domain membership valid as worker counts change  
-live.
-
-**Layer 10 — Domain Grouping:**  
-With the target `core_id` confirmed, the least-loaded active local worker within  
-that core is selected. The token is placed into that worker's mailbox. All tokens  
-under the same seed land in the same core's mailbox domain, keeping related work  
-physically co-located.
-
-**Layer 11 — Execution:**  
-The worker loop dequeues the token and calls `_execute_token_wrapped`. Before the  
-function runs, `conductor.activate()` sets the conductor seed into a thread-local  
-on the executor thread. If the function spawns further child tokens, they  
-automatically inherit the seed through the same creation-time stamping mechanism  
-in `task_token_guard`.
-
-**Layer 12 — Finalization: Cleanup & Metadata:**  
-When the token transitions to any terminal state (`COMPLETED`, `FAILED`,  
-`KILLED`, `TIMEOUT`), `transition_state()` calls `conductor.on_complete()`.  
-The pending count decrements. When it reaches zero — meaning the lead and every  
-child have finished — the seed is removed from the conductor registry and the  
-sticky pin is released. Execution timing, core assignment, and complexity score  
-are written to the execution record.  
+| Location                               | Change                                                                                                                        |
+|----------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
+| `_choose_local_worker_least_loaded`    | Manual `best_local/best_len` loop → `min(range(active), key=lambda i: mailbox.qsize())`                                       |
+| `choose_worker_for_core`               | Same pattern → `min(range(active), key=lambda i: worker_queue_sizes[base+i])`                                                 |
+| `assign_worker_positions`              | `append` loop → list comprehension                                                                                            |
+| `classify_token_weight` tag path       | `if/elif/else` string compare → `_WEIGHT_MAP.get(weight_str, TaskWeight.MEDIUM)` class-level dict                             |
+| `_put_routing_block` else-branch       | `if external_calls or has_sticky:` → `if has_sticky:` — `external_calls` already ruled out by outer `if`, dead branch removed |
+| `_put_routing_block` FAST `route_args` | Unreachable `external_calls` condition on sticky-only path removed                                                            |
 
 ---
 
-## Test Coverage Added
+### 7. `core_affinity_queue.py` — Loop and Boolean Simplification
 
-**Cache Storm Test** (`demo/cache_storm.py`)  
-Submits anchor tokens to pin keys to cores, then fires concurrent bursts of  
-tokens with identical `(op_type, args)` keys targeting different cores. Verifies  
-the sticky registry redirects all of them to the pinned core with zero misses.  
-
-**Hash Conductor Test** (`demo/hash_conductor_test.py`)  
-Submits lead tokens that spawn children during execution. Verifies all tokens  
-in each chain land on the same core, carry matching seeds, and that the conductor  
-snapshot is empty after resolution. Also checks seed uniqueness across  
-independent concurrent leads.  
+| Location                | Change                                                                                                |
+|-------------------------|-------------------------------------------------------------------------------------------------------|
+| `_build_preferences`    | Verbose `if/else` with redundant fallback prints → inline ternary + single preference dict literal    |
+| `get_affinity_report`   | Build loop with `if total > 0` branch → dict comprehension with walrus `:=`                           |
+| `print_affinity_report` | `if core_key in report:` + index → walrus `if (stats := report.get(...)):` — eliminates double lookup |
 
 ---
 
-## Benchmark
+### 8. `demo/max_concurrency_test.py` — Timer and Reporting Overhaul
 
-Endurance run across 15 doubling waves. 131,068 tokens total.  
+**Problem:** Per-wave timing used `time.perf_counter()` floats which
+accumulate rounding error on sub-millisecond waves. Total elapsed swallowed
+15 × 0.5s = 7.5s of inter-wave sleep, making overall `tok/s` appear ~60%
+lower than the true active-time rate.
 
+**Results:**  
+
+```terminaloutput
+======================================================================================
+  RESULTS SUMMARY
+======================================================================================
+  Wave   Tokens   OK    Fail       Time      Tok/s   Lat(ms)    Conc   Overlap   ΣTask(ms)
+  ----------------------------------------------------------------------------------------
+  1      4        4     0        2.968ms     1347.6    0.742ms   1.00×     1.53×       4.55ms
+  2      8        8     0        1.054ms     7592.3    0.132ms   5.63×     5.82×       6.13ms
+  3      16       16    0        1.086ms    14738.4    0.068ms  10.94×    12.59×      13.67ms
+  4      32       32    0        2.227ms    14370.4    0.070ms  10.66×    15.92×      35.45ms
+  5      64       64    0        1.210ms    52870.7    0.019ms  39.23×    30.52×      36.94ms
+  6      128      128   0        2.222ms    57595.4    0.017ms  42.74×    41.00×      91.12ms
+  7      256      256   0        4.548ms    56293.4    0.018ms  41.77×    42.24×     192.10ms
+  8      512      512   0       14.849ms    34479.5    0.029ms  25.59×    24.28×     360.62ms
+  9      1024     1024  0       15.814ms    64754.0    0.015ms  48.05×    46.56×     736.24ms
+  10     2048     2048  0       32.664ms    62698.8    0.016ms  46.53×    46.48×    1518.38ms
+  11     4096     4096  0       91.186ms    44919.2    0.022ms  33.33×    34.42×    3138.82ms
+  12     8192     8192  0      237.752ms    34456.1    0.029ms  25.57×    26.43×    6282.80ms
+  13     16384    16384 0      593.702ms    27596.3    0.036ms  20.48×    21.52×   12777.36ms
+  14     32768    32768 0     1186.575ms    27615.6    0.036ms  20.49×    22.38×   26554.21ms
+  15     65536    65536 0     2485.401ms    26368.4    0.038ms  19.57×    23.58×   58612.42ms
+  ----------------------------------------------------------------------------------------
+  TOTAL  131068   131068 0       active 4.673s  wall 42.337s <- 
+                                        ^
+  49% reduction from 83.506s total wall time, but active time is the real story here.
+
+  Overall throughput (active time) : 28,046.4 tok/s
+  Avg latency across waves         : 0.086 ms/token
+  Peak concurrency ratio           : 48.05×
+  Peak overlap ratio               : 46.56×
+
+  Active time  = Σ wave elapsed only  (excludes 0.75s inter-wave sleep)
+  Wall time    = full orchestrator span including sleep and scheduling
+
+  Overlap ratio = Σ(individual task times) / wave elapsed time
+  Values above 1× indicate true parallel execution.
+  Values approaching N = N tasks running simultaneously.
+======================================================================================
 ```
-Wave   Tokens    OK      Fail    Time      Tok/s     Lat(ms)   Conc    Overlap
-1      4         4       0       0.003s    1386.2    0.721     1.00×   1.44×
-2      8         8       0       0.003s    2391.2    0.418     1.72×   2.48×
-3      16        16      0       0.006s    2744.8    0.364     1.98×   4.82×
-4      32        32      0       0.011s    2812.7    0.356     2.03×   11.32×
-5      64        64      0       0.022s    2880.0    0.347     2.08×   22.01×
-6      128       128     0       0.044s    2907.6    0.344     2.10×   29.78×
-7      256       256     0       0.090s    2846.8    0.351     2.05×   37.98×
-8      512       512     0       0.182s    2811.5    0.356     2.03×   41.81×
-9      1024      1024    0       0.364s    2813.9    0.355     2.03×   44.18×
-10     2048      2048    0       0.775s    2644.3    0.378     1.91×   44.86×
-11     4096      4096    0       1.454s    2816.3    0.355     2.03×   38.34×
-12     8192      8192    0       2.905s    2819.9    0.355     2.03×   32.64×
-13     16384     16384   0       5.925s    2765.0    0.362     1.99×   27.92×
-14     32768     32768   0       12.102s   2707.7    0.369     1.95×   24.96×
-15     65536     65536   0       23.494s   2789.5    0.358     2.01×   24.21×
 
-TOTAL  131,068   131,068  0      89.091s
-Avg latency : 0.386 ms/token
-Peak overlap: 44.86×
-```
+**Changes:**
 
-Zero failures. Latency holds within 0.04ms from wave 3 through wave 15.  
-Peak overlap of 44.86× achieved at wave 10 with flat latency — the system  
-reached saturation and held position rather than degrading.  
+- Per-wave timing switched to `time.perf_counter_ns()` — integer nanoseconds,
+  no float accumulation error.
+- `tok_per_sec` computed as `(target × 1_000_000_000) / elapsed_ns` — integer
+  arithmetic throughout.
+- `total_active_ns` accumulates wave-only elapsed time. Inter-wave sleep is
+  explicitly excluded from all throughput calculations.
+- Summary reports `active time` and `wall time` as separate lines — never
+  conflated.
+- Inter-wave sleep reduced from 0.5s to 0.05s — `asyncio.gather` guarantees
+  completion before sleep runs; 0.5s was dead time.
+- Four throughput lines added to summary. See **Throughput Reporting** section
+  above for full definitions.
 
 ---
 
-## Files Added
+## Files Changed
 
-```
-threads/sticky_token.py
-threads/hash_conductor.py
-threads/demo/cache_storm_ops.py
-threads/demo/cache_storm.py
-threads/demo/hash_conductor_ops.py
-threads/demo/hash_conductor_test.py
-```
+| File                             | Type                                                                       |
+|----------------------------------|----------------------------------------------------------------------------|
+| `unhashable_checker.py`          | Extended — `HashPolicy`, `DigestPolicy`, `_DISPATCH`, `fast_make_hashable` |
+| `hash_conductor.py`              | Modified — policy-aware seed generation                                    |
+| `sticky_token.py`                | Modified — empty-args freeze guard                                         |
+| `core_pinned_staggered_queue.py` | Modified — loop simplification, dead branch removal                        |
+| `core_affinity_queue.py`         | Modified — loop and boolean simplification                                 |
+| `demo/max_concurrency_test.py`   | Modified — NS timing, active/wall split, four throughput metrics           |
 
-## Files Modified
+---
 
-```
-threads/core_pinned_staggered_queue.py   routing, executor wrapper, cleanup
-threads/token_system.py                  seed stamping, state machine hook
-threads/tg_print.py                      sticky + conductor channels registered
-```
+## Constraints and Notes
+
+- `HashPolicy.NONE` removes all arg-based sticky anchoring. Any operation
+  tagged `NONE` that also carries `external_calls` will lose content-keyed
+  domain routing and fall back to candidate-core only. Explicit opt-in.
+- `DigestPolicy` values must not be mixed mid-run on the same operation type.
+  Seeds are stamped at `charge` time and inherited by children directly —
+  mixing is structurally prevented but worth noting for configuration
+  management.
+- `_DISPATCH` only short-circuits on exact type matches. Subclasses fall
+  through to the `isinstance` chain. No coverage regression.
+- All policy defaults are unchanged. No existing decorated function changes
+  behaviour without an explicit tag opt-in.
+- Throughput figures in the benchmark are based on **accumulated totals across
+  all waves**, not averages of independent per-wave unit rates. Wall time
+  includes inter-wave sleep and scheduling gaps and will always appear higher
+  than active time would suggest. This is expected and correct.

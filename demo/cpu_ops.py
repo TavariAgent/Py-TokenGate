@@ -50,7 +50,6 @@ def fibonacci_operation(n):
     """Recursive fibonacci (intentionally inefficient for testing)."""
     if n <= 1:
         return n
-    # Iterative version for safety (recursive would be too slow)
     a, b = 0, 1
     for _ in range(n):
         a, b = b, a + b

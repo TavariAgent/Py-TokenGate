@@ -16,6 +16,8 @@ conductor_child_op
 """
 
 import time
+
+from ..unhashable_checker import HashPolicy, DigestPolicy
 from ..token_system import task_token_guard
 
 CHILDREN_PER_LEAD: int   = 4
@@ -34,7 +36,10 @@ def conductor_child_op(n: int) -> int:
 
 @task_token_guard(
     operation_type="conductor_lead",
-    tags={"weight": "medium", "external_calls": ["conductor_child"]},
+    tags={"weight": "medium",
+          "hash_policy": HashPolicy.FAST,
+          "digest_policy": DigestPolicy.FAST,
+          "external_calls": ["conductor_child"]},
 )
 def conductor_lead_op(lead_n: int) -> list:
     """Spawn child tokens and return them immediately.

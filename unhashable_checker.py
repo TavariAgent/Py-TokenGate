@@ -16,6 +16,7 @@ This means the file does NOT need updating when a new array library ships.
 Layers (executed in order)
 ===========================
  1. Fast path           hash() already works — return unchanged
+ 1b. O(1) dispatch      exact-type lookup in _DISPATCH before isinstance chain
  2. Python built-ins    list, dict, set, bytearray, memoryview, slice,
                         array.array, tuple-containing-unhashable
  3. Standard library    deque, OrderedDict, defaultdict, Counter,
@@ -64,15 +65,19 @@ Shape + dtype is the correct grain for core-domain routing.
 
 Public API
 ==========
-    make_hashable(obj)    →  Hashable
-    safe_args_key(args)   →  tuple[Hashable, ...]
-    is_hashable(obj)      →  bool
+    make_hashable(obj)        →  Hashable
+    fast_make_hashable(obj)   →  Hashable  (builtins + stdlib only)
+    safe_args_key(args)       →  tuple[Hashable, ...]
+    is_hashable(obj)          →  bool
+    HashPolicy                →  Enum (NONE | FAST | STANDARD | FULL)
+    DigestPolicy              →  Enum (FULL | SHORT | FAST | MINIMAL)
 """
 from __future__ import annotations
 
 import array as _array
 import collections
 import io
+from enum import Enum
 from typing import Any, Hashable
 
 # ---------------------------------------------------------------------------
@@ -100,6 +105,68 @@ def _array_fingerprint(obj: Any, hint: str = '') -> tuple:
 
 
 # ---------------------------------------------------------------------------
+# Hash Policy — user-controlled hashing depth per operation
+# ---------------------------------------------------------------------------
+
+class HashPolicy(Enum):
+    """Controls how deeply token args are hashed at routing time.
+
+    Set via task_token_guard tags={"hash_policy": HashPolicy.FAST}.
+
+    NONE     — no arg hashing; route_args is always ().
+               Use for high-frequency ops with no sticky/conductor anchoring.
+    FAST     — builtins and stdlib only (layers 1–3). Unrecognised types get
+               identity routing (type_name, id). No library detection chain.
+    STANDARD — full make_hashable pipeline (default, unchanged behaviour).
+    FULL     — same as STANDARD; reserved for explicit subclass-fallthrough intent.
+    """
+    NONE     = "none"
+    FAST     = "fast"
+    STANDARD = "standard"
+    FULL     = "full"
+
+
+# ---------------------------------------------------------------------------
+# Digest Policy — user-controlled conductor seed size
+# ---------------------------------------------------------------------------
+
+class DigestPolicy(Enum):
+    """Controls the hash algorithm and output length used for conductor seed generation.
+
+    Set via task_token_guard tags={"digest_policy": DigestPolicy.FAST}.
+
+    FULL    — SHA-256, 64-char hex (default, current behaviour).
+              Maximum collision resistance. Use when token volume is very
+              high or lead token lifetime is long.
+
+    SHORT   — SHA-256 truncated to 16 chars (64-bit space).
+              Safe at any realistic TokenGate volume. Faster dict ops and
+              key comparisons than FULL.
+
+    FAST    — BLAKE2s 8-byte digest → 16-char hex.
+              Fastest cryptographic option. Same 64-bit collision space
+              as SHORT, lower compute cost than SHA-256. Preferred for
+              high-frequency lead operations.
+
+    MINIMAL — SHA-256 truncated to 8 chars (32-bit space).
+              Lowest overhead. Safe at low token volume with short-lived
+              leads. Collisions at this level are benign — they merge
+              domain chains into a shared mailbox cluster, shifting load
+              distribution rather than corrupting data. The least-loaded
+              mechanism compensates, but heavy tasks may fall back from
+              their primary core under saturation.
+    """
+    FULL    = "full"
+    SHORT   = "short"
+    FAST    = "fast"
+    MINIMAL = "minimal"
+
+
+# Populated at module load by _build_dispatch() after make_hashable is defined.
+_DISPATCH: dict = {}
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -111,13 +178,21 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
     """
 
     # ── 1. Fast path ──────────────────────────────────────────────────────
-    # int, float, str, bool, bytes, NoneType, complex, Enum, frozenset,
-    # datetime, Decimal, Fraction, pathlib.Path, hashable tuple, etc.
+    # Catches RuntimeError too: non-scalar torch.Tensor raises RuntimeError,
+    # not TypeError, from hash() — consistent with is_hashable().
     try:
         hash(obj)
         return obj
-    except TypeError:
+    except (TypeError, RuntimeError):
         pass
+
+    # ── 1b. O(1) exact-type dispatch ──────────────────────────────────────
+    # Populated at module load for dict, list, set, np.ndarray, pd.DataFrame,
+    # torch.Tensor, and other common exact types.
+    # Subclass misses fall through to the isinstance chain below — no regression.
+    _handler = _DISPATCH.get(type(obj))
+    if _handler is not None:
+        return _handler(obj)
 
     # ── 2. Python built-in mutable containers ─────────────────────────────
 
@@ -533,20 +608,15 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
         return 'OpenGL', _type_name, id(obj)
 
     # ── 18. Structural: array-like ────────────────────────────────────────
-    # Catches any array-type from a library not listed above that follows
-    # the standard array protocol (.shape, .dtype).
-    # Covers: future NumPy-like libraries, custom research arrays, etc.
     _shape = getattr(obj, 'shape', _SENTINEL)
     _dtype = getattr(obj, 'dtype', _SENTINEL)
     if _shape is not _SENTINEL and _dtype is not _SENTINEL:
         return _type_name, _shape, str(_dtype)
 
-    # shape without dtype (e.g. some ragged/symbolic arrays)
     if _shape is not _SENTINEL:
         return _type_name, _shape
 
     # ── 19. Structural: mapping-like ──────────────────────────────────────
-    # Any object that quacks like a dict but wasn't caught above.
     if (callable(getattr(obj, 'keys', None)) and
             callable(getattr(obj, 'values', None)) and
             callable(getattr(obj, 'items', None))):
@@ -558,7 +628,6 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
             return _type_name, id(obj)
 
     # ── 20. Structural: graph-like ────────────────────────────────────────
-    # Any object with .nodes and .edges (NetworkX protocol, igraph-like, etc.)
     if hasattr(obj, 'nodes') and hasattr(obj, 'edges'):
         try:
             return (_type_name,
@@ -568,7 +637,6 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
             return _type_name, id(obj)
 
     # ── 21. Structural: iterable with length ──────────────────────────────
-    # Any other sized iterable that wasn't caught above.
     if hasattr(obj, '__len__') and hasattr(obj, '__iter__'):
         try:
             return _type_name, len(obj)
@@ -576,20 +644,147 @@ def make_hashable(obj: Any) -> Hashable:  # noqa: C901
             pass
 
     # ── 22. Dataclass with __hash__ = None ────────────────────────────────
-    # Python explicitly sets __hash__ = None (not absent — actually None)
-    # on any @dataclass(eq=True, frozen=False).  This is different from a
-    # class that simply doesn't define __hash__ at all.
     if getattr(type(obj), '__hash__', _SENTINEL) is None:
         return f'dataclass:{_type_name}', id(obj)
 
     # ── 23. Generic fallback ──────────────────────────────────────────────
-    # repr() is more stable than id() across short-lived GC cycles.
-    # id() is the absolute last resort.
     try:
         return _type_name, _safe_repr(obj)
     except Exception:
         return _type_name, id(obj)
 
+
+# ---------------------------------------------------------------------------
+# fast_make_hashable — HashPolicy.FAST path (layers 1–3 only)
+# ---------------------------------------------------------------------------
+
+def fast_make_hashable(obj: Any) -> Hashable:
+    """Reduced make_hashable for HashPolicy.FAST — layers 1–3 only.
+
+    Covers Python builtins and standard library containers. Any type not
+    handled here falls back to (type_name, id(obj)) — identity routing —
+    rather than walking the full library-detection chain.
+
+    Safe for operations where args are known primitives, or where
+    best-effort routing stability is acceptable.
+    """
+    try:
+        hash(obj)
+        return obj
+    except (TypeError, RuntimeError):
+        pass
+
+    if isinstance(obj, dict):
+        return tuple(sorted((fast_make_hashable(k), fast_make_hashable(v)) for k, v in obj.items()))
+    if isinstance(obj, (list, tuple)):
+        return tuple(fast_make_hashable(i) for i in obj)
+    if isinstance(obj, (set, frozenset)):
+        return frozenset(fast_make_hashable(i) for i in obj)
+    if isinstance(obj, bytearray):
+        return bytes(obj)
+    if isinstance(obj, memoryview):
+        try:
+            return bytes(obj)
+        except TypeError:
+            return 'memoryview', obj.format, obj.shape
+    if isinstance(obj, slice):
+        return 'slice', obj.start, obj.stop, obj.step
+    if isinstance(obj, _array.array):
+        return 'array.array', obj.typecode, len(obj)
+    if isinstance(obj, collections.deque):
+        return 'deque', tuple(fast_make_hashable(i) for i in obj)
+    if isinstance(obj, (collections.OrderedDict,
+                        collections.defaultdict,
+                        collections.Counter)):
+        return tuple(sorted(
+            (fast_make_hashable(k), fast_make_hashable(v)) for k, v in obj.items()
+        ))
+    if isinstance(obj, collections.ChainMap):
+        return 'ChainMap', tuple(fast_make_hashable(m) for m in obj.maps)
+
+    # Identity fallback — stable within session; skips all library detection
+    return type(obj).__name__, id(obj)
+
+
+# ---------------------------------------------------------------------------
+# _DISPATCH population — runs once at module load
+# ---------------------------------------------------------------------------
+
+def _handle_memoryview(obj: Any) -> Hashable:
+    """Named helper for memoryview dispatch (lambdas can't hold try/except)."""
+    try:
+        return bytes(obj)
+    except TypeError:
+        return 'memoryview', obj.format, obj.shape
+
+
+def _build_dispatch() -> None:
+    """Register exact-type handlers for the O(1) dispatch table.
+
+    Called once at module load. Only registers types that are actually
+    importable in the current environment — missing libraries are silently
+    skipped. Subclass misses fall through to the isinstance chain in
+    make_hashable — no coverage regression.
+    """
+
+    # ── Python builtins ───────────────────────────────────────────────────
+    _DISPATCH[dict]             = lambda o: tuple(sorted((make_hashable(k), make_hashable(v)) for k, v in o.items()))
+    _DISPATCH[list]             = lambda o: tuple(make_hashable(i) for i in o)
+    _DISPATCH[set]              = lambda o: frozenset(make_hashable(i) for i in o)
+    _DISPATCH[bytearray]        = bytes
+    _DISPATCH[memoryview]       = _handle_memoryview
+    _DISPATCH[slice]            = lambda o: ('slice', o.start, o.stop, o.step)
+    _DISPATCH[_array.array]     = lambda o: ('array.array', o.typecode, len(o))
+
+    # ── Standard library ──────────────────────────────────────────────────
+    _DISPATCH[collections.deque]        = lambda o: ('deque', tuple(make_hashable(i) for i in o))
+    _DISPATCH[collections.OrderedDict]  = lambda o: tuple(sorted((make_hashable(k), make_hashable(v)) for k, v in o.items()))
+    _DISPATCH[collections.defaultdict]  = _DISPATCH[collections.OrderedDict]
+    _DISPATCH[collections.Counter]      = _DISPATCH[collections.OrderedDict]
+    _DISPATCH[collections.ChainMap]     = lambda o: ('ChainMap', tuple(make_hashable(m) for m in o.maps))
+
+    # ── Optional libraries — registered only if present at import time ────
+    try:
+        import numpy as np  # type: ignore
+        _DISPATCH[np.ndarray] = lambda o: ('ndarray', o.shape, str(o.dtype))
+    except ImportError:
+        pass
+
+    try:
+        import pandas as pd  # type: ignore
+        _DISPATCH[pd.DataFrame]   = lambda o: ('DataFrame', o.shape, tuple(str(d) for d in o.dtypes))
+        _DISPATCH[pd.Series]      = lambda o: ('Series', len(o), str(o.dtype), o.name)
+        _DISPATCH[pd.MultiIndex]  = lambda o: ('MultiIndex', o.nlevels, len(o))
+        _DISPATCH[pd.Index]       = lambda o: ('Index', len(o), str(o.dtype))
+        _DISPATCH[pd.Categorical] = lambda o: ('Categorical', len(o.categories), o.ordered)
+    except ImportError:
+        pass
+
+    try:
+        import torch  # type: ignore
+        _DISPATCH[torch.Tensor] = lambda o: ('Tensor', tuple(o.shape), str(o.dtype), o.device.type)
+    except (ImportError, Exception):
+        pass
+
+    try:
+        import cupy as cp  # type: ignore
+        _DISPATCH[cp.ndarray] = lambda o: ('cupy.ndarray', o.shape, str(o.dtype))
+    except (ImportError, Exception):
+        pass
+
+    try:
+        from PIL import Image as _PILImage  # type: ignore
+        _DISPATCH[_PILImage.Image] = lambda o: ('PIL.Image', o.mode, o.size)
+    except (ImportError, Exception):
+        pass
+
+
+_build_dispatch()
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 def safe_args_key(args: tuple) -> tuple:
     """Convert a full token args tuple to a hashable routing key.

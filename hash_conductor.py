@@ -14,20 +14,28 @@ Hash Conductor — seed-based core domain anchoring for token call chains.
                                            │
                           ┌──────────────────────────────────────┐
   Solution                │  When a lead token is charged, a     │
-                          │  SHA-256 seed is derived from its    │
-                          │  token_id and external_calls.  That  │
+                          │  digest is derived from its          │
+                          │  token_id and external_calls using   │
+                          │  the configured DigestPolicy.That    │
                           │  seed is pinned to whichever core    │
-                          │  the lead lands on.  Any child token │
+                          │  the lead lands on. Any child token  │
                           │  created during the lead's execution │
                           │  inherits the seed and is routed to  │
                           │  the same core domain automatically. │
                           └──────────────────────────────────────┘
 
 Seed uniqueness
-    Seed = SHA-256( token_id + ":" + freeze(external_calls) )
-    Full 64-char hex digest — collision probability negligible at any
-    realistic token volume.  token_id is included so two lead tokens
-    with identical external_calls still get independent domains.
+    Default (DigestPolicy.FULL):
+        Seed = SHA-256( token_id + ":" + freeze(external_calls) ) — 64-char hex
+    DigestPolicy.SHORT:  SHA-256 truncated to 16 chars  (64-bit space)
+    DigestPolicy.FAST:   BLAKE2s 8-byte digest → 16-char hex (64-bit space)
+    DigestPolicy.MINIMAL: SHA-256 truncated to 8 chars  (32-bit space)
+
+    Collision semantics for MINIMAL
+        Collisions merge two logical domain chains into a shared mailbox
+        cluster.  The least-loaded mechanism compensates, but heavy tasks
+        may fall back from their primary core under saturation, inertly
+        reducing performance without data corruption.
 
 Parallel seeds
     Each lead call generates its own seed independently.  No special
@@ -61,6 +69,7 @@ import threading
 from typing import Dict, Optional
 
 from .sticky_token import freeze, sticky_registry
+from .unhashable_checker import DigestPolicy
 from .tg_print import tg_print
 
 
@@ -126,32 +135,68 @@ class HashConductor:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def generate_seed(token: TaskToken) -> str:
+    def generate_seed(token: "TaskToken", policy: DigestPolicy = DigestPolicy.FULL) -> str:
         """Derive a unique domain seed from a lead token.
 
-        Uses the full SHA-256 digest of (token_id + freeze(external_calls))
-        for collision-free uniqueness across any realistic token volume.
+        Policy controls digest algorithm and output length:
+
+            FULL    — SHA-256 full 64-char hex (default).
+            SHORT   — SHA-256 truncated to 16 chars (64-bit space).
+            FAST    — BLAKE2s 8-byte digest → 16-char hex (64-bit space,
+                      lower compute cost than SHA-256).
+            MINIMAL — SHA-256 truncated to 8 chars (32-bit space).
+                      Collisions are benign but shift load distribution —
+                      see module docstring for full collision semantics.
         """
         token_id       = getattr(token, "token_id", id(token))
         external_calls = (
             getattr(token.metadata, "external_calls", None)
             or token.metadata.tags.get("external_calls", "")
         )
-        raw  = f"{token_id}:{freeze(external_calls)}"
-        return hashlib.sha256(raw.encode()).hexdigest()
+        raw = f"{token_id}:{freeze(external_calls)}".encode()
 
-    def charge(self, token: TaskToken, candidate_core: int) -> int:
+        if policy == DigestPolicy.FAST:
+            # BLAKE2s — fastest, 64-bit collision space
+            return hashlib.blake2s(raw, digest_size=8).hexdigest()
+        elif policy == DigestPolicy.SHORT:
+            # SHA-256 truncated — 64-bit space, familiar algorithm
+            return hashlib.sha256(raw).hexdigest()[:16]
+        elif policy == DigestPolicy.MINIMAL:
+            # SHA-256 truncated — 32-bit space, lowest overhead
+            return hashlib.sha256(raw).hexdigest()[:8]
+        else:
+            # FULL — SHA-256 complete digest (default)
+            return hashlib.sha256(raw).hexdigest()
+
+    def charge(self, token: "TaskToken", candidate_core: int) -> int:
         """Assign a seed domain to a lead token and pin it to a core.
 
-        Generates a fresh seed, stamps it onto the token's metadata,
-        pins the seed to *candidate_core* via the sticky registry, and
-        opens the pending count at 1 (the lead itself).
+        Reads digest_policy from the token's tags to select the seed
+        algorithm. Generates a fresh seed, stamps it onto the token's
+        metadata, pins the seed to candidate_core via the sticky registry,
+        and opens the pending count at 1 (the lead itself).
 
         Returns the actual pinned core (always candidate_core on first
         call; the sticky registry handles collisions if the same seed
         somehow appeared earlier).
         """
-        seed = self.generate_seed(token)
+        # Resolve digest policy from token tag
+        _dp_raw = token.metadata.tags.get("digest_policy", DigestPolicy.FULL)
+        if isinstance(_dp_raw, str):
+            try:
+                digest_policy = DigestPolicy(_dp_raw)
+            except ValueError:
+                tg_print(
+                    "conductor",
+                    f"Unknown digest_policy '{_dp_raw}' on token="
+                    f"{getattr(token, 'token_id', '?')} — defaulting to FULL",
+                    level="warn",
+                )
+                digest_policy = DigestPolicy.FULL
+        else:
+            digest_policy = _dp_raw
+
+        seed = self.generate_seed(token, digest_policy)
         token.metadata.tags["conductor_seed"] = seed
 
         # Pin via the sticky registry using the seed as the op key.
@@ -165,12 +210,12 @@ class HashConductor:
         tg_print(
             "conductor",
             f"Charged   token={getattr(token, 'token_id', '?')}  "
-            f"core={core_id}  seed={seed[:12]}…",
+            f"core={core_id}  seed={seed[:12]}…  digest={digest_policy.value}",
             level="dispatch",
         )
         return core_id
 
-    def register_child(self, token: TaskToken, candidate_core: int) -> int:
+    def register_child(self, token: "TaskToken", candidate_core: int) -> int:
         """Stamp the active seed onto a child token and route it to the domain.
 
         Called from put() when get_active_seed() returns a value during
@@ -218,7 +263,7 @@ class HashConductor:
                 self._pending[seed] += 1
 
     @staticmethod
-    def activate(token: TaskToken) -> Optional[str]:
+    def activate(token: "TaskToken") -> Optional[str]:
         """Set the active seed in the executor thread before the lead runs.
 
         Must be called from *inside* the function passed to run_in_executor
@@ -235,7 +280,7 @@ class HashConductor:
         """Clear the active seed after the lead function returns."""
         _set_active_seed(None)
 
-    def on_complete(self, token: TaskToken):
+    def on_complete(self, token: "TaskToken"):
         """Decrement the pending count for a token's seed.
 
         When the count reaches zero (lead + all children done) the seed
@@ -245,7 +290,7 @@ class HashConductor:
         if not seed:
             return
 
-        # Added runtime guard to prevent stampping into seeds.
+        # Runtime guard to prevent stamping into seeds.
         assert isinstance(seed, str), f"conductor_seed tag must be str, got {type(seed)}"
 
         release = False
@@ -266,7 +311,11 @@ class HashConductor:
             )
 
     def snapshot(self) -> Dict[str, dict]:
-        """Return a {seed_prefix: {core, pending}} snapshot for observability."""
+        """Return a {seed_prefix: {core, pending}} snapshot for observability.
+
+        seed[:12] is safe for all DigestPolicy values — MINIMAL seeds are
+        8 chars and Python's slice never raises on out-of-bounds.
+        """
         with self._lock:
             return {
                 seed[:12]: {"core": core, "pending": self._pending.get(seed, 0)}

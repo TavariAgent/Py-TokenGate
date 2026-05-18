@@ -55,9 +55,10 @@ REGISTERED_TASKS = {
 
 # Task categories (for organizing in GUI)
 CATEGORIES = {
-    'Testing': {'color': '#8b5cf6', 'order': 1},
-    'Production': {'color': '#10b981', 'order': 2},
-    'Demo': {'color': '#3b82f6', 'order': 3},
-    'Maintenance': {'color': '#f59e0b', 'order': 4},
-    'Custom': {'color': '#6366f1', 'order': 5}
+    'Benchmark': {'color': '#7c6af7', 'order': 1},
+    'Testing':   {'color': '#8b5cf6', 'order': 2},
+    'Production':{'color': '#10b981', 'order': 3},
+    'Demo':      {'color': '#3b82f6', 'order': 4},
+    'Maintenance':{'color': '#f59e0b','order': 5},
+    'Custom':    {'color': '#6366f1', 'order': 6},
 }

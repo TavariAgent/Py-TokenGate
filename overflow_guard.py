@@ -166,11 +166,11 @@ class OverflowGuard:
         }
 
     def should_retry(
-        self, token_id: str,
-        execution_duration: float,
-        success: bool,
-        operation_type: Optional[str] = None,
-        token_tags: dict = None
+            self, token_id: str,
+            execution_duration: float,
+            success: bool,
+            operation_type: Optional[str] = None,
+            token_tags: Optional[dict] = None
     ) -> bool:
         """
         Determine if a task should be retried.
@@ -221,7 +221,7 @@ class OverflowGuard:
         # First failure - can create backup
         return True
 
-    def create_retry_token(self, original_token: TaskToken) -> Optional[TaskToken]:
+    def create_retry_token(self, original_token: TaskToken, execution_duration: float) -> Optional[TaskToken]:
         """Create a retry token with bumped allocation under the active retry policy."""
         with self._backup_lock:
             token_id = original_token.token_id

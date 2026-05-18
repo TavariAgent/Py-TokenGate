@@ -98,6 +98,7 @@ class StickyTokenRegistry:
                     level="dispatch",
                 )
                 return core_id
+            
             existing_core = self._markers[key].core_id
             if existing_core != core_id:
                 tg_print(
@@ -143,7 +144,10 @@ class StickyTokenRegistry:
 
     @staticmethod
     def _make_key(op_name: str, args: tuple) -> _InflightKey:
-        return op_name, freeze(args)
+        # Guard: skip freeze() entirely on empty-args path (conductor unmark,
+        # sticky-only tokens). freeze(()) always returns () — this avoids
+        # the recursive call on the majority path through on_complete/unmark.
+        return op_name, freeze(args) if args else ()
 
 
 # ---------------------------------------------------------------------------
