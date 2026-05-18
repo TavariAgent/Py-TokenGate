@@ -109,15 +109,27 @@ def my_operation(n: int) -> int:
 # token ID and call list. That seed is pinned to a core domain. Any token spawned during 
 # the lead's execution inherits the seed and gets routed to the same core automatically. 
 # The domain releases when the lead and all of its children have completed. This is a 
-# production ready feature that provides deterministic routing, prevents data races, 
-# and measurably better behaviour under saturated load conditions for complex call chains.
+# production ready feature that provides deterministic routing.
 @task_token_guard(
-    operation_type="lead_op",
-    tags={"weight": "medium", "external_calls": ["child_op"]},
+    operation_type="lead",
+    tags={"weight": "medium",
+          # "hash_policy" determines token routing checks.
+          "hash_policy": HashPolicy.FAST, # Optional (default is STANDARD)
+          "digest_policy": DigestPolicy.FAST, # Optional (default is FULL)
+          "external_calls": ["child"]},
 )
 def lead_operation(n: int) -> list:
     return [child_op(n + i) for i in range(4)]
+# 'hash_policy' and 'digest_policy' can be adjusted for performance vs collision 
+# risk based on the expected call volume and criticality of the operations. 
+# Hash collisions are benign but can cause performance degradation if they occur frequently
+# forcing tasks to redistribute across cores.
 ```
+
+> About the "hash_policy" - in practical terms: if your operation receives np.ndarray directly,
+> STANDARD is correct. Ifit receives objects that are subclasses of registereddispatch types 
+> and you want to be explicit that thefallthrough is load-bearing for your routing correctness, 
+> tag it FULL so all checks are completed, with respect for the fallback.
 
 ### Running the WebSocket server:
 

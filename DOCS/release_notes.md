@@ -5,7 +5,7 @@
 This pass targets the token submission hot path — the sequence of operations
 between a caller invoking a decorated function and the token landing in a
 worker mailbox. No routing contracts, no execution semantics, and no public
-API signatures were changed. Also added a runtime gaurd for tokens inserted
+API signatures were changed. Also added a runtime guard for tokens inserted
 into the coordinator. All improvements are opt-in or transparent.
 
 ---
@@ -72,7 +72,7 @@ dominate the token count. This is the correct and expected result.
 ### 1. `unhashable_checker.py` — O(1) Type Dispatch
 
 **Problem:** `make_hashable` walked a 23-layer `isinstance` chain on every
-unhashable value, including common exact types like `dict`, `list`, and
+un-hashable value, including common exact types like `dict`, `list`, and
 `np.ndarray`.
 
 **Change:** Added `_DISPATCH: dict` populated once at module load by
@@ -106,7 +106,7 @@ or conductor domain anchoring.
 |------------|----------------------------------------------------------------------------------------------|
 | `NONE`     | No arg hashing. `route_args` is always `()`. Free routing only.                              |
 | `FAST`     | Builtins and stdlib only (layers 1–3). Unknown types get identity routing `(type_name, id)`. |
-| `STANDARD` | Full `make_hashable` pipeline. Default — unchanged behaviour.                                |
+| `STANDARD` | Full `make_hashable` pipeline. Default — unchanged behavior.                                |
 | `FULL`     | Same as `STANDARD`. Reserved for explicit subclass-fallthrough intent.                       |
 
 Set per-operation via decorator tag:
@@ -115,14 +115,14 @@ Set per-operation via decorator tag:
 @task_token_guard(
     operation_type="conductor_lead",
     tags={"weight": "medium",
-          "hash_policy": HashPolicy.FAST,
-          "digest_policy": DigestPolicy.FAST,
+          "hash_policy": HashPolicy.FAST, # Optional (default is STANDARD)
+          "digest_policy": DigestPolicy.FAST, # Optional (read below)
           "external_calls": ["conductor_child"]},
 )
 def my_function(...): ...
 ```
 
-Default remains `STANDARD`. No existing code changes behaviour without opt-in.
+Default remains `STANDARD`. No existing code changes behavior without opt-in.
 
 Also added `fast_make_hashable()` — the reduced pipeline used by
 `HashPolicy.FAST`. Covers layers 1–3, falls back to `(type_name, id)` for
@@ -159,7 +159,7 @@ Set per-operation via decorator tag:
 ```python
 @task_token_guard(
     operation_type="my_op",
-    tags={"digest_policy": DigestPolicy.FAST}
+    tags={"digest_policy": DigestPolicy.FAST} # This will default to FULL if not set
 )
 def my_function(...): ...
 ```
@@ -313,7 +313,7 @@ lower than the true active-time rate.
 - `_DISPATCH` only short-circuits on exact type matches. Subclasses fall
   through to the `isinstance` chain. No coverage regression.
 - All policy defaults are unchanged. No existing decorated function changes
-  behaviour without an explicit tag opt-in.
+  behavior without an explicit tag opt-in.
 - Throughput figures in the benchmark are based on **accumulated totals across
   all waves**, not averages of independent per-wave unit rates. Wall time
   includes inter-wave sleep and scheduling gaps and will always appear higher
