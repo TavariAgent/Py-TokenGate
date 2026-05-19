@@ -830,6 +830,10 @@ def task_token_guard(
                 level='dispatch',
             )
 
+            seed = get_active_seed()  # resolve seed first
+            if seed:
+                final_tags["conductor_seed"] = seed  # in tags before token exists
+
             token = global_token_pool.create_token(
                 func=final_func,
                 args=args,
@@ -839,9 +843,7 @@ def task_token_guard(
             )
             token.metadata.tags["complexity_score"] = metrics.complexity_score
 
-            seed = get_active_seed()
             if seed:
-                token.metadata.tags["conductor_seed"] = seed
                 conductor.pre_register(seed)  # hold the domain open before put() runs
 
             cb = getattr(global_token_pool, "default_on_state_change", None)

@@ -129,6 +129,8 @@ class HashConductor:
         self._lock    = threading.Lock()
         self._cores:   Dict[str, int] = {}   # seed → pinned core_id
         self._pending: Dict[str, int] = {}   # seed → outstanding token count
+        self._grace_cores: Dict[str, int] = {}  # <-- add this
+        self._GRACE_MAX = 256
 
     # ------------------------------------------------------------------
     # Public API
@@ -229,9 +231,18 @@ class HashConductor:
         if not seed:
             return candidate_core
 
-        # seed is already stamped — no need to write it again
         with self._lock:
-            if seed not in self._cores:
+            if seed in self._cores:
+                core_id = self._cores[seed]
+            elif seed in self._grace_cores:
+                core_id = self._grace_cores[seed]
+                tg_print(
+                    "conductor",
+                    f"Grace hit  token={getattr(token, 'token_id', '?')}  "
+                    f"seed={seed[:12]}…  core={core_id}",
+                    level="dispatch",
+                )
+            else:
                 tg_print(
                     "conductor",
                     f"Child fallthrough  token={getattr(token, 'token_id', '?')}  "
@@ -239,7 +250,6 @@ class HashConductor:
                     level="warn",
                 )
                 return candidate_core
-            core_id = self._cores[seed]
 
         tg_print(
             "conductor",
@@ -290,25 +300,25 @@ class HashConductor:
         if not seed:
             return
 
-        # Runtime guard to prevent stamping into seeds.
         assert isinstance(seed, str), f"conductor_seed tag must be str, got {type(seed)}"
 
         release = False
+        released_core = None
         with self._lock:
             if seed in self._pending:
                 self._pending[seed] -= 1
                 if self._pending[seed] <= 0:
                     release = True
-                    self._cores.pop(seed, None)
+                    released_core = self._cores.pop(seed, None)
                     self._pending.pop(seed, None)
+                    if released_core is not None:
+                        self._grace_cores[seed] = released_core
+                        if len(self._grace_cores) > self._GRACE_MAX:
+                            self._grace_cores.pop(next(iter(self._grace_cores)))
 
         if release:
             sticky_registry.unmark(seed, ())
-            tg_print(
-                "conductor",
-                f"Released  seed={seed[:12]}…",
-                level="dispatch",
-            )
+            tg_print("conductor", f"Released  seed={seed[:12]}…", level="dispatch")
 
     def snapshot(self) -> Dict[str, dict]:
         """Return a {seed_prefix: {core, pending}} snapshot for observability.

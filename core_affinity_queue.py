@@ -19,7 +19,7 @@ from .tg_print import tg_print
 
 class TaskWeight(Enum):
     """Routing weight classes used by the affinity policy."""
-    HEAVY  = "heavy"   # High difficulty work gets Core 1
+    HEAVY  = "heavy"   # High difficulty work gets Core 1+
     MEDIUM = "medium"  # Balanced work gets Core 2+
     LIGHT  = "light"   # Simple work gets Core 3+
 
@@ -148,7 +148,7 @@ class CoreAffinityQueue:
         report = self.get_affinity_report()
 
         for core_id in range(1, self.num_cores + 1):
-            if (stats := report.get(f'core_{core_id}')):
+            if stats := report.get(f'core_{core_id}'):
                 print(f"\nCore {core_id}:")
                 print(f"  Heavy:  {stats['heavy']:>5.1f}%")
                 print(f"  Medium: {stats['medium']:>5.1f}%")

@@ -2,10 +2,10 @@
 
 Welcome to the TokenGate repository. 
 
-### (Unhashable operations fixed as of v0.3.3.3-beta)
+### (New hashing options available as of v0.4.4.5, see BETA.md for details)
 
 > Read BETA.md for the quickest entry point and overview of the TokenGate.  
-> If you're not sure about the this and want to see it in action, go to SETUP.md   
+> If you're not sure about this and want to see it in action, go to SETUP.md   
 > for a quick demo and walkthrough under varous loads.
 
 ---
@@ -18,7 +18,7 @@ normal threading patterns.
 
 ### What it is not:
 
-It is not presented as production code.
+It is not presented as a production ready product. (Use at your own discretion)
 
 ### Overview:
 

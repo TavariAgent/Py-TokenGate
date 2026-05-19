@@ -148,13 +148,10 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
 
         try:
             loop = asyncio.get_running_loop()
-
-            _execute_token_wrapped = partial(self._execute_token_wrapped, token)
-            result = await loop.run_in_executor(None, _execute_token_wrapped)
+            result = await loop.run_in_executor(None, self._execute_token_wrapped, token) # Fixed unfilled args
             token.set_result(result)
             self.total_executed += 1
             success = True
-
             tg_print('worker', f'{worker_id} completed {token.token_id}', level='state')
 
         except Exception as e:
@@ -246,14 +243,16 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
                         complexity_score=token.metadata.tags.get('complexity_score')
                     )
 
-            # Release the sticky-core pin so the next token for this
-            # (op, args) key can be freely routed again.
-            sticky_key: str = (
-                    token.metadata.tags.get("sticky_anchor")
-                    or token.metadata.operation_type
-                    or ""
-            )
-            sticky_registry.unmark(sticky_key, token.args)
+        conductor.on_complete(token) # Fixed position
+
+        # Release the sticky-core pin so the next token for this
+        # (op, args) key can be freely routed again.
+        sticky_key: str = (
+                token.metadata.tags.get("sticky_anchor")
+                or token.metadata.operation_type
+                or ""
+        )
+        sticky_registry.unmark(sticky_key, token.args)
 
     async def _execute_token_with_metrics(self, token: "TaskToken", worker_id: str, core_id: int):
         """Execute one token while updating worker-state and outcome metrics."""
@@ -601,9 +600,8 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
             core_id = conductor.register_child(token, candidate_core)
 
         else:
-            # external_calls is falsy by this point — only has_sticky matters
             has_sticky = "sticky_anchor" in token.metadata.tags
-            if has_sticky:
+            if external_calls or has_sticky:
                 sticky_name = token.metadata.tags.get("sticky_anchor") or op_type
 
                 # Gate route_args on hash policy
@@ -612,7 +610,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
                 elif hash_policy == HashPolicy.FAST:
                     route_args = tuple(fast_make_hashable(a) for a in token.args)
                 else:  # STANDARD or FULL — current behaviour, unchanged
-                    route_args = token.args
+                    route_args = token.args if external_calls else ()
 
                 core_id = sticky_registry.mark(sticky_name, route_args, candidate_core)
             else:
