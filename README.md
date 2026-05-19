@@ -95,13 +95,9 @@ if __name__ == "__main__":
 
 ```python
 
-# "Sticky anchors" give you control over the data locality of your operations.  
-# By using consistent sticky anchors, you can ensure that identical operations   
-# are routed to the same core, which can improve cache performance and reduce  
-# latency for operations that share data or have similar access patterns. For   
-# instance: Any operation that produces multiple returns during fucntion call   
-# will also produce multiple tokens, and if those tokens are not pinned to the   
-# same core they will lose the benefits of data locality.
+# A "sticky_anchor" is for tokens which must return on the same call chain 
+# more than one time or in identical form. This uses the "local_i" (local 
+# worker index) to route those back to their same domains.
 @task_token_guard(
     operation_type="my_op",
     tags={"weight": "medium", "sticky_anchor": "op_token"}, 
@@ -109,20 +105,48 @@ if __name__ == "__main__":
 def my_operation(n: int) -> int:
     ...
 
-# "Lead tokens", those decorated with `external_calls` generate a SHA-256 seed   
-# from their token ID and call list. That seed is pinned to a core domain. Any   
-# token spawned during the lead's execution inherits the seed and is routed to   
-# the same core automatically. The domain releases when the lead and all of its   
-# children have completed. This is a powerful way to ensure that an entire call   
-# chain stays together on the same core, which can be critical for performance   
-# when the operations are related and share data. For instance: If you have a   
-# function that spawns multiple child operations, you can use `external_calls`   
-# to ensure that all of those operations are executed on the same core, which   
-# can improve performance by keeping related data in the same cache and reducing   
-# cross-core communication overhead.
+# "external_calls" is a declaration for tokens which have child operations. 
+# Only the leads need to be marked with the tag, they may also declare how 
+# much complexity each hash should be. The system will guard you if you try 
+# to hash something un-hashable, just know that it's fairly secure as is. 
+# If you aren't sure about the hashability read prints and rethink the 
+# aprroach. Here's details on the policies (hash collisions are benign!):
+"""        Policy controls digest algorithm and output length:
+
+            FULL    — SHA-256 full 64-char hex (default).
+            SHORT   — SHA-256 truncated to 16 chars (64-bit space).
+            FAST    — BLAKE2s 8-byte digest → 16-char hex (64-bit space,
+                      lower compute cost than SHA-256).
+            MINIMAL — SHA-256 truncated to 8 chars (32-bit space).
+                      Collisions are benign but shift load distribution —
+                      see module docstring for full collision semantics.
+                      
+Fingerprint semantics
+=====================
+This produces ROUTING FINGERPRINTS, not equality witnesses.
+
+    Array-like   →  (lib_hint, shape, dtype_str)
+    Container    →  recursively frozen equivalent
+    GPU object   →  (type_name, id)          [stable within session]
+    Dataclass    →  (type_name, id)          [identity routing]
+    Unknown      →  (type_name, repr[:256])  [best-effort stability]
+
+Public API
+==========
+    make_hashable(obj)        →  Hashable
+    fast_make_hashable(obj)   →  Hashable  (builtins + stdlib only)
+    safe_args_key(args)       →  tuple[Hashable, ...]
+    is_hashable(obj)          →  bool
+    HashPolicy                →  Enum (NONE | FAST | STANDARD | FULL)
+    DigestPolicy              →  Enum (FULL | SHORT | FAST | MINIMAL)
+"""
 @task_token_guard(
-    operation_type="lead_op",
-    tags={"weight": "medium", "external_calls": ["child_op"]},
+    operation_type="lead",
+    tags={"weight": "medium",
+          # "hash_policy" determines token routing checks.
+          "hash_policy": HashPolicy.FAST, # Optional (default is STANDARD)
+          "digest_policy": DigestPolicy.FAST, # Optional (default is FULL)
+          "external_calls": ["child"]},
 )
 def lead_operation(n: int) -> list:
     return [child_op(n + i) for i in range(4)]
