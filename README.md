@@ -144,12 +144,14 @@ Public API
     operation_type="lead",
     tags={"weight": "medium",
           # "hash_policy" determines token routing checks.
-          "hash_policy": HashPolicy.FAST, # Optional (default is STANDARD)
+          "hash_policy": HashPolicy.FAST, # Conditional (default is STANDARD)
           "digest_policy": DigestPolicy.FAST, # Optional (default is FULL)
           "external_calls": ["child"]},
 )
 def lead_operation(n: int) -> list:
     return [child_op(n + i) for i in range(4)]
+# Hash policy should be stated when hashing is invoveled in the token. Means 
+# contracts are clear about how hashes have to be checked.
 
 # !!! CAREFUL !!! Don't mix `sticky_anchor` and `external_calls` on the same token.   
 # They are separate systems that both control data locality, but they do so in   
