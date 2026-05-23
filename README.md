@@ -10,6 +10,11 @@ Welcome to the TokenGate repository.
 
 ---
 
+#### NOTE: If your functions seems to stop running, it usually means you require a "hash_policy".
+
+The unhashable checker flags various unhashable types, you cannot make a contract with those types   
+without explicitly stating the hash policy, this is for clarity and user application safety.
+
 ### What it is:
 
 A small experimental system for routing decorated synchronous functions through a token-managed   
@@ -150,7 +155,7 @@ Public API
 )
 def lead_operation(n: int) -> list:
     return [child_op(n + i) for i in range(4)]
-# Hash policy should be stated when hashing is invoveled in the token. Means 
+# Hash policy should be stated when hashing is involved in the token. Means 
 # contracts are clear about how hashes have to be checked.
 
 # !!! CAREFUL !!! Don't mix `sticky_anchor` and `external_calls` on the same token.   
