@@ -35,7 +35,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from datetime import datetime
 
-from tg_print import tg_print
+from .tg_print import tg_print
 from .code_inspector import CodeMetrics
 
 

@@ -48,7 +48,7 @@ Level = Literal['info', 'debug', 'state', 'dispatch', 'warn', 'error']
 # ================================================================== #
 
 _DEFAULT_CHANNELS: dict[str, bool] = {
-    'gate':        False,    # admission_gate.py
+    'gate':        True,     # admission_gate.py
     'pool':        False,    # token_system.py  TokenPool
     'token':       False,    # token_system.py  TaskToken lifecycle
     'coordinator': False,    # operations_coordinator.py

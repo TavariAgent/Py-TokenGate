@@ -2,7 +2,7 @@
 
 Welcome to the TokenGate repository. 
 
-### (New hashing options available as of v0.4.4.5, see BETA.md for details)
+(Latest fixes include broken import paths and some unclear type declarations.)
 
 > Read BETA.md for the quickest entry point and overview of the TokenGate.  
 > If you're not sure about this and want to see it in action, go to SETUP.md   

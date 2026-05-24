@@ -654,7 +654,7 @@ class TokenPool:
         tg_print('pool', f'Killed {killed} tokens of type {operation_type}')
         return killed
 
-    def pause(self, operation_type: str = None, reason: str = "admin_pause"):
+    def pause(self, operation_type: str, reason: str = "admin_pause"):
         """Pause token or pool."""
         if operation_type:
             with self._lock:
@@ -664,7 +664,7 @@ class TokenPool:
             self._paused.clear()
             tg_print('pool', f'PAUSED globally ({reason}) — tokens will accumulate', level='warn')
 
-    def resume(self, operation_type: str = None, reason: str = "admin_resume"):
+    def resume(self, operation_type: str, reason: str = "admin_resume"):
         """Resume token or pool."""
         if operation_type:
             tokens_to_requeue = []
@@ -690,7 +690,7 @@ class TokenPool:
             self._paused.set()
             tg_print('pool', f'RESUMED globally ({reason}) — tokens will admit')
 
-    def drain(self, operation_type: str = None, reason: str = "admin_drain") -> int:
+    def drain(self, operation_type: str, reason: str = "admin_drain") -> int:
         """Drain the token or pool."""
         waiting = self.get_tokens_by_state(TokenState.WAITING)
         killed = 0
