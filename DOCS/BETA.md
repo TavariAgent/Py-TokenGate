@@ -8,26 +8,41 @@ This document provides an overview of the current state of TokenGate.
 
 ### Current Features
 
-- **Token based concurrency:** The core feature of TokenGate is its token-based concurrency model, which  
-    allows for efficient coordination of tasks across multiple threads.
-- **WebSocket support:** TokenGate includes support for WebSocket communication, enabling real-time  
-    monitoring and control of tasks.
-- **DoS protection:** The token system includes built-in DoS protection ("auto-blocking") to prevent overwhelming    
-    the system with too many "failed" concurrent tasks. (Tasks which do not return their result are "failed".)
-- **Telemetry:** TokenGate provides telemetry data for tasks, allowing for monitoring and debugging of concurrent   
-    operations with clarity.
-- **Flexible API:** The API is designed to be flexible and easy to use, allowing developers to quickly integrate  
-    TokenGate into their applications with minimal setup.
-- **Token safety:** The system is designed to prevent data loss and ensure that tokens are properly managed  
-    based on hashing as well as controlled token locality.
+- **Token based concurrency:** The core feature of TokenGate is its token-based  
+  concurrency model, which allows coordination of tasks across multiple threads.  
+
+
+- **WebSocket support:** Includes support for WebSocket communication,  
+  enabling real-time monitoring and control of tasks.
+
+
+- **DoS protection:** The token system includes built-in DoS protection ("auto-blocking")  
+  to prevent overwhelming the system with too many "failed" concurrent tasks.  
+
+(Tasks which do not return their result are "failed".)
+
+- **Telemetry:** TokenGate provides telemetry data for tasks, allowing for monitoring and   
+  debugging of concurrent operations.
+
+
+- **Flexible API:** The API is designed to be flexible and easy to use, allowing developers  
+  to quickly integrate into their applications with minimal setup.  
+
+
+- **Token safety:** The system is designed to prevent data loss and ensure that tokens are  
+  properly managed based on hashing as well as controlled token locality.  
 
 ### Limitations
-- **Beta status:** As a beta project, TokenGate may have bugs or performance issues that have not yet been    
-    identified or resolved.
-- **Limited documentation:** The documentation is currently limited and does not cover all aspects of the    
-    project. I plan to expand the documentation as the project progresses.  
-- **Performance under extreme load:** While TokenGate is designed to handle a high volume of tasks, its   
-    performance under extreme load conditions needs long term analysis.
+- **Beta status:** As a beta project, there may be bugs or performance issues that have  
+  not yet been identified or resolved. 
+
+
+- **Limited documentation:** The documentation is currently limited. I plan to expand the  
+  documentation as the project progresses.  
+
+
+- **Performance under extreme load:** The system is designed to handle a high volume  
+  of tasks, its performance under extreme load conditions needs long term analysis.
 
 ## Get Started
 
@@ -114,7 +129,7 @@ def my_operation(n: int) -> int:
     operation_type="lead",
     tags={"weight": "medium",
           # "hash_policy" determines token routing checks.
-          "hash_policy": HashPolicy.FAST, # Optional (default is STANDARD)
+          "hash_policy": HashPolicy.FAST, # Conditional (type dependent)
           "digest_policy": DigestPolicy.FAST, # Optional (default is FULL)
           "external_calls": ["child"]},
 )
@@ -126,10 +141,51 @@ def lead_operation(n: int) -> list:
 # forcing tasks to redistribute across cores.
 ```
 
-> About the "hash_policy" - in practical terms: if your operation receives np.ndarray directly,
-> STANDARD is correct. Ifit receives objects that are subclasses of registereddispatch types 
-> and you want to be explicit that thefallthrough is load-bearing for your routing correctness, 
-> tag it FULL so all checks are completed, with respect for the fallback.
+> About the "hash_policy" - in practical terms: if your operation  
+> receives np.ndarray directly, STANDARD is correct. If it receives  
+> objects that are subclasses of registered dispatch types and you  
+> want to be explicit that the fall through is load-bearing for your  
+> routing correctness, tag it FULL so all checks are completed, with  
+> respect for the fallback.
+
+### Explicit TheadPool and ProcessPool support
+
+## Choosing Your Executor Pool
+
+TokenGate routes decorated tasks to either a `ThreadPoolExecutor` or a   
+`ProcessPoolExecutor` based on tags you set in `@task_token_guard`.  
+The default is always the thread pool — you opt into the process pool    
+explicitly.
+
+---
+
+### Thread Pool (default)
+
+**Best for:**
+- Any operation that touches IO — file reads/writes, database queries
+- Operations using the `storage_speed` tag (this signals IO automatically)  
+- Short to medium CPU tasks where spawn overhead would outweigh the gain  
+- Operations that capture external state, use locks, or unpickleable objects
+  
+**How to use:**  
+
+```python
+# Default — no tag needed
+@task_token_guard(
+    operation_type='write_file', 
+    tags={'weight': 'heavy', 'storage_speed': 'FAST'}
+)
+def write(data): 
+    ...
+
+# Or explicitly
+@task_token_guard(
+    operation_type='operation', 
+    tags={'weight': 'medium', 'process_pool': True}
+)
+def process(x): 
+    ...
+```
 
 ### Running the WebSocket server:
 
@@ -179,25 +235,26 @@ REGISTERED_TASKS = {
 
 #### What to look for in the WebSocket GUI
 
-When you first set up your WebSocket environment and want to run a task, you should see the following at `localhost:5000`:
-- **Task Launcher:** Your registered task should appear in the task launcher with its description and category.
+When you first set up your WebSocket environment and want to run a task,   
+you should see the following at `localhost:5000`:
+
+- **Task Launcher:** Your registered task should appear in the task launcher   
+  with its description and category.
+
 ![Task Launcher](/assets/task_launcher.png)
 
-- **Controls:** When you run the task, there is controls where you can monitor and manage it (e.g., stop, restart).
+- **Controls:** When you run the task, there is controls where you can monitor and   
+  manage it (e.g., stop, restart).
+
 ![Admin Dashboard](/assets/per_operation_controls.png)  
 
-- **Telemetry:** As the task runs, you should see telemetry data such as execution time, token usage,   
-    and any relevant logs or outputs.
+- **Telemetry:** As the task runs, you should see telemetry data such as execution   
+  time, token usage, and any relevant logs or outputs.
 ![TokenGate Dashboard — live run](/assets/dash_working.png)
 
 ## Conclusion
 
-TokenGate is an active beta project that aims to provide a powerful and flexible production ready 
-concurrency management system using tokens. While it is currently functional, there are still areas for 
-improvement and optimization. I encourage users to explore the project, provide feedback, and contribute 
-to its development. 📦 🚀
+TokenGate is an active beta project that aims to eventually provide a powerful and  
+flexible production ready concurrency management system using tokens.  
 
-To quickly reach out go here and drop a review in the feedback section: [Tavari](https://www.tavari.online)  
-
-I see a couple hundred of you out there, if this has been fun, or useful or even just something you want to   
-see grow, please leave a star on GitHub, it helps me spread the freedom of TokenGate
+If this is useful to you then consider starring the repo to show support!

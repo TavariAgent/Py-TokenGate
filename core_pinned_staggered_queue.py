@@ -13,11 +13,12 @@ Routing happens before mailbox placement:
 
 This keeps mailbox placement aligned with the configured affinity policy.
 """
-
-import asyncio
 import time
+import asyncio
+import importlib
 from functools import partial
 from typing import Dict, List, Tuple, Any
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 from .threading_metrics import get_metrics
 from .token_system import TaskToken, TokenState
@@ -101,6 +102,13 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         self._active = False
         self._execution_tasks = []
 
+        # ---- Executor pools ----
+        self._thread_executor = ThreadPoolExecutor(
+            max_workers=self.total_workers,
+            thread_name_prefix="tg_io"
+        )
+        self._process_executor = ProcessPoolExecutor(max_workers=self.num_cores)
+
         tg_print('worker', f'CorePinnedQueue initialized  '
                            f'cores={num_cores}  '
                            f'workers_per_core={workers_per_core}  '
@@ -148,7 +156,33 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
 
         try:
             loop = asyncio.get_running_loop()
-            result = await loop.run_in_executor(None, self._execute_token_wrapped, token) # Fixed unfilled args
+            tags = token.metadata.tags
+
+            # Warn on conflicting signals before resolving
+            if tags.get("storage_speed") and tags.get("process_pool"):
+                tg_print('worker',
+                         f'{token.token_id} has both storage_speed and process_pool — '
+                         f'defaulting to thread executor', level='warn')
+
+            # Executor routing:
+            # storage_speed tag  → thread  (IO confirmed)
+            # process_pool: True → process (CPU, explicit opt-in)
+            # neither            → thread  (safe default)
+            if tags.get("process_pool") and not tags.get("storage_speed"):
+                result = await loop.run_in_executor(
+                    self._process_executor,
+                    _tg_process_bootstrap,
+                    tags['_func_module'],
+                    tags['_func_qualname'],
+                    token.args,
+                    token.kwargs
+                )
+            else:
+                result = await loop.run_in_executor(
+                    self._thread_executor,
+                    self._execute_token_wrapped,
+                    token
+                )
             token.set_result(result)
             self.total_executed += 1
             success = True
@@ -637,3 +671,21 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
                 conductor.deactivate()  # always clears, even on exception
 
         return _conducted()
+
+
+def _tg_process_bootstrap(module_name: str, qualname: str, args: tuple, kwargs: dict):
+    """Module-level bootstrap for ProcessPoolExecutor dispatch.
+
+    Accepts plain string identifiers instead of a function reference,
+    avoiding the @wraps identity mismatch that causes PicklingError.
+
+    The subprocess reimports the module, retrieves the wrapper by qualname,
+    then accesses __wrapped__ to reach the original unwrapped callable.
+    """
+    mod = importlib.import_module(module_name)
+    obj = mod
+    for part in qualname.split('.'):
+        obj = getattr(obj, part)
+    # obj is the wrapper — __wrapped__ is the original set by @wraps
+    original = getattr(obj, '__wrapped__', obj)
+    return original(*args, **kwargs)

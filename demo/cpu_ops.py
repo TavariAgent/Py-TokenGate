@@ -24,7 +24,7 @@ def moderate_operation(size):
     return sum(filtered)
 
 
-@task_token_guard(operation_type='nested_loops', tags={'weight': 'medium'})
+@task_token_guard(operation_type='nested_loops', tags={'weight': 'medium', "process_pool": True})
 def complex_operation(dimension):
     """Slower: Nested loops with matrix-like structure."""
     matrix = []
@@ -36,7 +36,7 @@ def complex_operation(dimension):
     return sum(sum(row) for row in matrix)
 
 
-@task_token_guard(operation_type='cpu_intensive', tags={'weight': 'heavy'})
+@task_token_guard(operation_type='cpu_intensive', tags={'weight': 'heavy', "process_pool": True})
 def heavy_operation(iterations):
     """Slow: CPU-intensive calculation."""
     result = 0
@@ -45,9 +45,9 @@ def heavy_operation(iterations):
     return result
 
 
-@task_token_guard(operation_type='fibonacci', tags={'weight': 'heavy'})
+@task_token_guard(operation_type='fibonacci', tags={'weight': 'heavy', "process_pool": True})
 def fibonacci_operation(n):
-    """Recursive fibonacci (intentionally inefficient for testing)."""
+    """Iterative fibonacci (intentionally inefficient for testing)."""
     if n <= 1:
         return n
     a, b = 0, 1

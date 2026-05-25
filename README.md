@@ -1,8 +1,8 @@
 # TokenGate (Python 3.12*)
 
-Welcome to the TokenGate repository. 
+Welcome to the TokenGate repository.
 
-(Latest fixes include broken import paths and some unclear type declarations.)
+(ProcessPoolExecutor support added. See "Explicit ThreadPool and ProcessPool support".)
 
 > Read BETA.md for the quickest entry point and overview of the TokenGate.  
 > If you're not sure about this and want to see it in action, go to SETUP.md   
@@ -10,18 +10,22 @@ Welcome to the TokenGate repository.
 
 ---
 
-#### NOTE: If your functions seems to stop running, it usually means you require a "hash_policy".
+#### NOTE: If your functions seem to stop running, it usually means you require a "hash_policy".
 
 The unhashable checker flags various unhashable types, you cannot make a contract with those types   
-without explicitly stating the hash policy, this is for clarity and user application safety.
+without explicitly stating the hash policy, this is for clarity and user application safety.  
 
-### What it is:
+The system will attempt to convert unhashable types to hashable to keep domain locks on more various   
+operations, if it finds something that can't be hashed it will not be operated on by the domain hashing   
+algorithm.
+
+### What this is:
 
 A small experimental system for routing decorated synchronous functions through a token-managed   
 concurrency model. It is intended to operate as its own concurrency workflow rather than alongside   
 normal threading patterns.
 
-### What it is not:
+### What this is not:
 
 It is not presented as a production ready product. (Use at your own discretion)
 
@@ -33,7 +37,9 @@ orchestration with thread-backed work in a structured way.
 This repository is **a proof of concept, not a finished product**. It is experimental, still evolving,   
 and shared in the spirit of exploration.  
 
-If you'd like the fuller overview, please start here:
+If you'd like the fuller overview, please start here:  
+
+(Note: Some sections are still being rewritten, but the core concepts remain.)
 
 - [Proof of Concept](./DOCS/proof-of-concept.md)
 
@@ -95,6 +101,95 @@ def main():
 if __name__ == "__main__":
     main()
 ```
+
+### NEW! Explicit TheadPool and ProcessPool support
+
+## Choosing Your Executor Pool
+
+TokenGate routes decorated tasks to either a `ThreadPoolExecutor` or a  
+`ProcessPoolExecutor` based on tags you set in `@task_token_guard`. The  
+default is always the thread pool — you opt into the process pool  
+explicitly.
+
+---
+
+### Thread Pool (default)
+
+**Best for:**
+- Any operation that touches IO — file reads/writes, database queries,  
+  network calls, asset loading  
+- Operations using the `storage_speed` tag (this signals IO automatically)  
+- Short to medium CPU tasks where spawn overhead would outweigh the gain  
+- Operations that capture external state, use locks, or hold references to   
+  objects that can't be pickled  
+  
+**How to use:**  
+
+```python
+# Default — no tag needed
+@task_token_guard(
+    operation_type='write_file', 
+    tags={'weight': 'heavy', 'storage_speed': 'FAST'}
+)
+def write(data): 
+    ...
+
+# Or explicitly
+@task_token_guard(
+    operation_type='operation', 
+    tags={'weight': 'medium', 'process_pool': True}
+)
+def process(x): 
+    ...
+```
+
+---
+
+### Process Pool
+
+**Best for:**
+- Long-running, purely CPU-bound work with no IO involvement
+- Operations with tight numeric loops, matrix operations, recursive algorithms
+- Tasks whose inputs and outputs are simple, serialisable values
+
+**How to use:**
+
+```python
+@task_token_guard(
+    operation_type='cpu_intensive',
+    tags={'weight': 'heavy', 'process_pool': True} # Explicit opt-in to process pool
+)
+def heavy_compute(n): 
+    ...
+```
+
+> #### *Note: Complex operations using a process pool might perform better in some cases.*
+
+
+---
+
+### What to watch out for
+
+**Pickling errors**   
+Everything crossing the process boundary must be picklable — the  
+function, its arguments, and its return value. Common causes of failure:  
+
+- Lambdas and functions defined inside other functions  
+- Objects holding locks, file handles, or socket connections
+- Anything referencing asyncio state
+- NumPy arrays with object dtypes, or custom classes without `__reduce__`
+
+A `PicklingError` at call time means the task belongs in the thread pool.
+
+**Spawn overhead**  
+Process pool has a fixed startup cost of roughly 1–5ms per task dispatch.    
+For fast operations this cost exceeds the actual work. A useful rule of
+ 
+
+**Conflicting tags**    
+Setting both `storage_speed` and `process_pool: True` on the same  
+operation is a misconfiguration. TokenGate will warn and fall back to  
+the thread pool, since IO presence always takes priority.  
 
 ### NEW! Data locality tags for "Sticky anchors" & "Lead tokens"
 

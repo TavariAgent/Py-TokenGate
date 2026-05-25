@@ -13,6 +13,7 @@ the coordinator/event-loop layer.
 """
 from __future__ import annotations
 
+import types
 import asyncio
 import itertools
 import operator
@@ -76,6 +77,36 @@ class TokenMetadata:
         if self.started_at:
             return (self.completed_at or time.time()) - self.started_at
         return None
+
+
+@dataclass(frozen=True)
+class FuncIdentity:
+    """Immutable function identity stamp captured at decoration time.
+
+    Stored in token tags so the process pool bootstrap can reimport
+    the correct callable without touching token.func directly.
+    """
+    module: str
+    qualname: str
+
+
+def get_func_identity(func: Callable) -> FuncIdentity:
+    """Extract module and qualname with type-safe narrowing.
+
+    isinstance against types.FunctionType is the narrowing anchor —
+    the type checker recognises FunctionType as carrying __module__
+    and __qualname__, resolving the Callable attribute warning.
+    """
+    if isinstance(func, types.FunctionType):
+        return FuncIdentity(
+            module=func.__module__,
+            qualname=func.__qualname__
+        )
+    # Fallback for non-function callables (classes, partials, etc.)
+    return FuncIdentity(
+        module=getattr(func, '__module__', '') or '',
+        qualname=getattr(func, '__qualname__', '') or getattr(func, '__name__', '')
+    )
 
 
 T = TypeVar("T")
@@ -833,6 +864,11 @@ def task_token_guard(
             seed = get_active_seed()  # resolve seed first
             if seed:
                 final_tags["conductor_seed"] = seed  # in tags before token exists
+
+            # Lock in function identity for process pool routing
+            identity = get_func_identity(func)
+            final_tags['_func_module'] = identity.module
+            final_tags['_func_qualname'] = identity.qualname
 
             token = global_token_pool.create_token(
                 func=final_func,
