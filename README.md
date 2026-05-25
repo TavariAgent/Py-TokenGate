@@ -183,7 +183,7 @@ A `PicklingError` at call time means the task belongs in the thread pool.
 
 **Spawn overhead**  
 Process pool has a fixed startup cost of roughly 1–5ms per task dispatch.    
-For fast operations this cost exceeds the actual work. A useful rule of
+For fast operations this cost exceeds the actual work.
  
 
 **Conflicting tags**    
@@ -199,8 +199,8 @@ the thread pool, since IO presence always takes priority.
 # more than one time or in identical form. This uses the "local_i" (local 
 # worker index) to route those back to their same domains.
 @task_token_guard(
-    operation_type="my_op",
-    tags={"weight": "medium", "sticky_anchor": "op_token"}, 
+    operation_type='my_op',
+    tags={'weight': 'medium', 'sticky_anchor': 'op_token'}, 
 )
 def my_operation(n: int) -> int:
     ...
@@ -241,12 +241,12 @@ Public API
     DigestPolicy              →  Enum (FULL | SHORT | FAST | MINIMAL)
 """
 @task_token_guard(
-    operation_type="lead",
-    tags={"weight": "medium",
+    operation_type='lead',
+    tags={'weight': 'medium',
           # "hash_policy" determines token routing checks.
-          "hash_policy": HashPolicy.FAST, # Conditional (default is STANDARD)
-          "digest_policy": DigestPolicy.FAST, # Optional (default is FULL)
-          "external_calls": ["child"]},
+          'hash_policy': HashPolicy.FAST, # Conditional (default is STANDARD)
+          'digest_policy': DigestPolicy.FAST, # Optional (default is FULL)
+          'external_calls': ['child']},
 )
 def lead_operation(n: int) -> list:
     return [child_op(n + i) for i in range(4)]
