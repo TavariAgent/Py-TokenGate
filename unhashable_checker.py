@@ -728,20 +728,20 @@ def _build_dispatch() -> None:
     """
 
     # ── Python builtins ───────────────────────────────────────────────────
-    _DISPATCH[dict]             = lambda o: tuple(sorted((make_hashable(k), make_hashable(v)) for k, v in o.items()))
-    _DISPATCH[list]             = lambda o: tuple(make_hashable(i) for i in o)
-    _DISPATCH[set]              = lambda o: frozenset(make_hashable(i) for i in o)
-    _DISPATCH[bytearray]        = bytes
-    _DISPATCH[memoryview]       = _handle_memoryview
-    _DISPATCH[slice]            = lambda o: ('slice', o.start, o.stop, o.step)
-    _DISPATCH[_array.array]     = lambda o: ('array.array', o.typecode, len(o))
+    _DISPATCH[dict] = lambda o: tuple(sorted((make_hashable(k), make_hashable(v)) for k, v in o.items()))
+    _DISPATCH[list] = lambda o: tuple(make_hashable(i) for i in o)
+    _DISPATCH[set] = lambda o: frozenset(make_hashable(i) for i in o)
+    _DISPATCH[bytearray] = bytes
+    _DISPATCH[memoryview] = _handle_memoryview
+    _DISPATCH[slice] = lambda o: ('slice', o.start, o.stop, o.step)
+    _DISPATCH[_array.array] = lambda o: ('array.array', o.typecode, len(o))
 
     # ── Standard library ──────────────────────────────────────────────────
-    _DISPATCH[collections.deque]        = lambda o: ('deque', tuple(make_hashable(i) for i in o))
-    _DISPATCH[collections.OrderedDict]  = lambda o: tuple(sorted((make_hashable(k), make_hashable(v)) for k, v in o.items()))
-    _DISPATCH[collections.defaultdict]  = _DISPATCH[collections.OrderedDict]
-    _DISPATCH[collections.Counter]      = _DISPATCH[collections.OrderedDict]
-    _DISPATCH[collections.ChainMap]     = lambda o: ('ChainMap', tuple(make_hashable(m) for m in o.maps))
+    _DISPATCH[collections.deque] = lambda o: ('deque', tuple(make_hashable(i) for i in o))
+    _DISPATCH[collections.OrderedDict] = lambda o: tuple(sorted((make_hashable(k), make_hashable(v)) for k, v in o.items()))
+    _DISPATCH[collections.defaultdict] = _DISPATCH[collections.OrderedDict]
+    _DISPATCH[collections.Counter] = _DISPATCH[collections.OrderedDict]
+    _DISPATCH[collections.ChainMap] = lambda o: ('ChainMap', tuple(make_hashable(m) for m in o.maps))
 
     # ── Optional libraries — registered only if present at import time ────
     try:

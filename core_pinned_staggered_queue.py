@@ -202,7 +202,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
                                    f'slow execution: {execution_duration:.1f}s  '
                                    f'op={token.metadata.operation_type}', level='warn')
 
-            # RECORD EXECUTION FOR GUI
+            # Record execution
             if self.coordinator:
                 from .operations_coordinator import ExecutionRecord
 
@@ -258,13 +258,16 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
 
                     # Create a retry token if needed
                     if should_retry:
-                        tg_print('worker', f'{worker_id} triggering retry for {token.token_id}', level='dispatch')
+                        tg_print('worker',
+                                 f'{worker_id} triggering retry for {token.token_id}', level='dispatch')
                         retry_token = guard.create_retry_token(token, execution_duration)
 
                         if retry_token:
-                            tg_print('worker', f'{worker_id} created retry: {retry_token.token_id}', level='dispatch')
+                            tg_print('worker',
+                                     f'{worker_id} created retry: {retry_token.token_id}', level='dispatch')
                         else:
-                            tg_print('worker', f'{worker_id} retries exhausted for {token.token_id}', level='warn')
+                            tg_print('worker',
+                                     f'{worker_id} retries exhausted for {token.token_id}', level='warn')
 
                 # Record result in Guard House
                 if hasattr(self.coordinator, 'guard_house'):
@@ -536,7 +539,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
 
         tg_print('worker', f'Started {self.total_workers} workers across {self.num_cores} cores')
 
-    async def _worker_loop(self, worker_idx: int, worker_id: str, core_id: int, local_i: int): # DO NOT REMOVE "worker_idx"!
+    async def _worker_loop(self, worker_idx: int, worker_id: str, core_id: int, local_i: int): # Don't del "worker_idx"!
         """Continuously consume one mailbox and execute admitted tokens."""
         q = self.mailboxes[(core_id, local_i)]
         tg_print('worker', f'{worker_id} started  core={core_id}  local={local_i}', level='state')

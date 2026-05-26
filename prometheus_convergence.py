@@ -253,22 +253,26 @@ class PrometheusConvergenceEngine:
 
         # RULE 1: High queue wait time = OVERLOADED
         if queue_wait_p95 > self.queue_wait_threshold:
-            tg_print('convergence', f'Core {core_id}: queue wait p95={queue_wait_p95:.2f}s > threshold {self.queue_wait_threshold}s  -> overloaded')
+            tg_print('convergence', f'Core {core_id}: '
+                f'queue wait p95={queue_wait_p95:.2f}s > threshold {self.queue_wait_threshold}s  -> overloaded')
             return 'overloaded', WorkerPattern.HEAVY
 
         # RULE 2: Deep queue = OVERLOADED
         if queue_depth > workers_per_core * self.queue_depth_factor:
-            tg_print('convergence', f'Core {core_id}: queue depth={queue_depth} > {workers_per_core * self.queue_depth_factor}  -> overloaded')
+            tg_print('convergence',f'Core {core_id}: '
+                f'queue depth={queue_depth} > {workers_per_core * self.queue_depth_factor}  -> overloaded')
             return 'overloaded', WorkerPattern.HEAVY
 
         # RULE 3: High utilization + any queue = OVERLOADED
         if utilization > self.utilization_high and queue_depth > 0:
-            tg_print('convergence', f'Core {core_id}: utilization={utilization:.1f}% > {self.utilization_high}% with queue  -> overloaded')
+            tg_print('convergence',f'Core {core_id}: '
+                f'utilization={utilization:.1f}% > {self.utilization_high}% with queue  -> overloaded')
             return 'overloaded', WorkerPattern.HEAVY
 
         # RULE 4: Low utilization = UNDERUTILIZED
         if utilization < self.utilization_low:
-            tg_print('convergence', f'Core {core_id}: utilization={utilization:.1f}% < {self.utilization_low}%  -> underutilized')
+            tg_print('convergence',f'Core {core_id}: '
+                f'utilization={utilization:.1f}% < {self.utilization_low}%  -> underutilized')
             return 'underutilized', WorkerPattern.LIGHT
 
         # RULE 5: Everything else = BALANCED
@@ -289,9 +293,12 @@ class PrometheusConvergenceEngine:
                 adjustments[pressure.core_id] = recommended
 
                 # Log the reason for the change and current pressure signals
-                tg_print('convergence',f'Core {pressure.core_id}: {current.name} -> {recommended.name}  reason={pressure.pressure_level}')
-                tg_print('convergence', f'depth={pressure.queue_depth}  util={pressure.worker_utilization:.1f}%' + (
-                             f'wait_p95={pressure.queue_wait_p95:.2f}s' if pressure.queue_wait_p95 else ''), level='debug')
+                tg_print('convergence',f'Core {pressure.core_id}:'
+                                       f'{current.name} -> {recommended.name}  reason={pressure.pressure_level}')
+                tg_print('convergence',
+                         f'depth={pressure.queue_depth}  '
+                         f'util={pressure.worker_utilization:.1f}%' +
+                         (f'wait_p95={pressure.queue_wait_p95:.2f}s' if pressure.queue_wait_p95 else ''), level='debug')
 
         return adjustments
 
@@ -316,9 +323,11 @@ class PrometheusConvergenceEngine:
             if worker_pool and hasattr(worker_pool, 'set_pattern'):
                 try:
                     worker_pool.set_pattern(core_id, pattern.value)
-                    tg_print('convergence', f'Core {core_id}: pattern applied to worker pool', level='dispatch')
+                    tg_print('convergence', f'Core {core_id}: '
+                                            f'pattern applied to worker pool', level='dispatch')
                 except Exception as e:
-                    tg_print('convergence', f'Core {core_id}: could not apply pattern to pool: {e}', level='warn')
+                    tg_print('convergence', f'Core {core_id}: '
+                                            f'could not apply pattern to pool: {e}', level='warn')
 
             self.metrics.record_convergence_change(
                 core_id,
@@ -333,7 +342,7 @@ class PrometheusConvergenceEngine:
                 'to_pattern': pattern.name
             })
             tg_print('convergence', f'Core {core_id}: {old_pattern.name} ({old_pattern.value} workers) '
-                                        f'-> {pattern.name} ({pattern.value} workers)', level='state')
+                                    f'-> {pattern.name} ({pattern.value} workers)', level='state')
 
     def get_convergence_status(self) -> dict:
         """Get a current convergence state."""

@@ -160,10 +160,14 @@ class OperationsCoordinator:
         self._loop_thread: Optional[threading.Thread] = None
 
         tg_print('coordinator', 'Ready!')
-        tg_print('coordinator', f'  Cores:            {self.topology.physical_cores}')
-        tg_print('coordinator', f'  Workers per core: {workers_per_core}')
-        tg_print('coordinator', f'  Total workers:    {self.topology.physical_cores * workers_per_core}')
-        tg_print('coordinator', f'  Convergence:      {"ENABLED" if enable_convergence else "disabled"}')
+        tg_print('coordinator',
+                 f'  Cores:            {self.topology.physical_cores}')
+        tg_print('coordinator',
+                 f'  Workers per core: {workers_per_core}')
+        tg_print('coordinator',
+                 f'  Total workers:    {self.topology.physical_cores * workers_per_core}')
+        tg_print('coordinator',
+                 f'  Convergence:      {"ENABLED" if enable_convergence else "disabled"}')
         tg_print('coordinator', '=' * 60)
 
     def print_guard_house_dashboard(self):

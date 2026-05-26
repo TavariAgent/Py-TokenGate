@@ -29,8 +29,6 @@ class OptimizationDecision(Enum):
     BLOCKED = "blocked"  # Below confidence boundary
 
 
-
-
 @dataclass
 class OperationAllocation:
     """Mutable allocation and confidence state for one operation type."""
@@ -207,7 +205,8 @@ class AllocationOptimizer:
             # All checks passed!
             return (
                 OptimizationDecision.OPTIMIZE,
-                f"Confidence {current_confidence}% >= boundary {allocation.confidence_boundary}%, delta: +{confidence_delta:.1f}%"
+                f"Confidence {current_confidence}% >= boundary {allocation.confidence_boundary}%,"
+                f" delta: +{confidence_delta:.1f}%"
             )
 
     def attempt_optimization(
@@ -223,7 +222,8 @@ class AllocationOptimizer:
         """
         decision, reasoning = self.can_optimize(operation_name, current_confidence)
 
-        tg_print('overflow', f'Optimizer {operation_name}: {decision.value}  — {reasoning}', level='debug')
+        tg_print('overflow',
+                 f'Optimizer {operation_name}: {decision.value}  — {reasoning}', level='debug')
 
         if decision != OptimizationDecision.OPTIMIZE:
             return None
@@ -288,7 +288,8 @@ class AllocationOptimizer:
             confidence_delta = new_confidence - allocation.last_observed_confidence
 
             tg_print('overflow', f'Optimizer result: {operation_name}  '
-                                 f'success={success}  confidence {allocation.last_observed_confidence}% -> {new_confidence}%  '
+                                 f'success={success}  '
+                                 f'confidence {allocation.last_observed_confidence}% -> {new_confidence}%  '
                                  f'delta={confidence_delta:+.1f}%', level='debug')
 
             if success and confidence_delta > 0:
@@ -307,19 +308,23 @@ class AllocationOptimizer:
                     # Normal cap at 95%
                     new_boundary = min(new_boundary, self.MAX_BOUNDARY)
 
-                tg_print('overflow', f'Ratchet: boundary {allocation.confidence_boundary}% -> {new_boundary}%', level='debug')
+                tg_print('overflow',
+                         f'Ratchet: '
+                         f'boundary {allocation.confidence_boundary}% -> {new_boundary}%', level='debug')
 
                 allocation.confidence_boundary = new_boundary
                 allocation.last_observed_confidence = new_confidence
 
             elif success and confidence_delta <= 0:
                 # SUCCESS but NO GAIN -> HOLD
-                tg_print('overflow', f'Hold: {operation_name} succeeded but confidence did not gain', level='debug')
+                tg_print('overflow',
+                         f'Hold: {operation_name} succeeded but confidence did not gain', level='debug')
                 allocation.last_observed_confidence = new_confidence
 
             else:
                 # FAILURE -> REVERT
-                tg_print('overflow', f'Revert: {operation_name} failed — restoring allocation', level='warn')
+                tg_print('overflow',
+                         f'Revert: {operation_name} failed — restoring allocation', level='warn')
 
                 # Revert to previous allocation
                 rate = allocation.get_optimization_rate()

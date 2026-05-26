@@ -367,7 +367,6 @@ def admin_pause_operation():
     op_type = data.get('operation_type')
 
     if coordinator:
-        # NOTE: You will need to implement pause_operation in your OperationsCoordinator
         success = coordinator.pause_operation(op_type)
         return jsonify({'success': success, 'operation_type': op_type})
     return jsonify({'error': 'No coordinator'}), 503
@@ -381,7 +380,6 @@ def admin_resume_operation():
     op_type = data.get('operation_type')
 
     if coordinator:
-        # NOTE: You will need to implement resume_operation in your OperationsCoordinator
         success = coordinator.resume_operation(op_type)
         return jsonify({'success': success, 'operation_type': op_type})
     return jsonify({'error': 'No coordinator'}), 503
@@ -395,7 +393,6 @@ def admin_drain_operation():
     op_type = data.get('operation_type')
 
     if coordinator:
-        # NOTE: You will need to implement drain_operation in your OperationsCoordinator
         count = coordinator.drain_operation(op_type)
         return jsonify({'drained': count, 'operation_type': op_type})
     return jsonify({'error': 'No coordinator'}), 503

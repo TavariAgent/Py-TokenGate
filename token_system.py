@@ -772,14 +772,11 @@ def task_token_guard(
     Args:
         operation_type: Stable operation label used for metadata and routing.
         tags: Optional routing and policy tags.
-              weight        'heavy' | 'medium' | 'light'
-              storage_speed 'FAST' | 'SLOW' | 'MODERATE' | 'INSANE'
-              sticky_anchor override the sticky-routing key name
-              external_calls list of downstream calls this token dispatches.
-                             REQUIRED to enable args fingerprinting and conductor
-                             domain anchoring. Without it, token.args are never
-                             hashed — safe default for functions that accept large
-                             or complex objects (numpy arrays, GPU buffers, etc.).
+              'weight':         'heavy' | 'medium' | 'light'
+              'storage_speed':  'FAST' | 'SLOW' | 'MODERATE' | 'INSANE'
+              'process_pool':   True | False - ProcessPoolExecutor opt-in
+              'sticky_anchor':  create the sticky routing identifier
+              'external_calls': list of downstream calls this token dispatches.
 
     Returns:
         A decorator that replaces direct execution with token submission.

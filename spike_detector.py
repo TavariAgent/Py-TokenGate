@@ -158,11 +158,13 @@ class SpikeDetector:
 
         # Check thresholds
         if deviation >= self.extreme_threshold:
-            reason = f"EXTREME spike: {deviation * 100:.1f}% deviation (predicted: {predicted_complexity:.1f}, avg: {historical_avg:.1f})"
+            reason = (f"EXTREME spike: {deviation * 100:.1f}% deviation "
+                      f"(predicted: {predicted_complexity:.1f}, avg: {historical_avg:.1f})")
             return True, deviation, reason
 
         elif deviation >= self.spike_threshold:
-            reason = f"Moderate spike: {deviation * 100:.1f}% deviation (predicted: {predicted_complexity:.1f}, avg: {historical_avg:.1f})"
+            reason = (f"Moderate spike: {deviation * 100:.1f}% deviation "
+                      f"(predicted: {predicted_complexity:.1f}, avg: {historical_avg:.1f})")
             return True, deviation, reason
 
         # No spike detected

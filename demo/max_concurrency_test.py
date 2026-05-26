@@ -142,9 +142,9 @@ def compute_overlap_ratio(tokens: List[TaskToken], elapsed: float) -> tuple[floa
     and are excluded from the sum so they don't deflate the ratio.
     """
     task_times = [
-        t.metadata.execution_time()
+        exec_time
         for t in tokens
-        if t.metadata.execution_time() is not None
+        if (exec_time := t.metadata.execution_time()) is not None
     ]
     if not task_times or elapsed <= 0:
         return 0.0, 0.0
@@ -157,7 +157,7 @@ def compute_overlap_ratio(tokens: List[TaskToken], elapsed: float) -> tuple[floa
 # ASYNC ORCHESTRATOR
 # ──────────────────────────────────────────────────────────────────[...]
 
-RELEASE_TARGETS = [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]
+RELEASE_TARGETS = [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384]
 
 # Inter-wave pause — gives the coordinator's convergence metrics a breath.
 # asyncio.gather guarantees all tokens are done before this runs, so it is
@@ -230,6 +230,14 @@ async def orchestrator(coordinator: OperationsCoordinator) -> None:
     print(f"  Operations : {len(OPERATIONS)}")
     print(f"  Waves      : {RELEASE_TARGETS}")
     print("=" * 86)
+
+    # ── Warmup ────────────────────────────────────────────────────────────
+    print("\n  [WARMUP]  Priming workers with 256 tokens (not recorded)...")
+    warmup_tokens = submit_batch(256)
+    await asyncio.gather(*warmup_tokens, return_exceptions=True)
+    await asyncio.sleep(_INTER_WAVE_SLEEP)
+    print("  [WARMUP]  Done.\n")
+    # ─────────────────────────────────────────────────────────────────────
 
     wall_start_ns   = time.perf_counter_ns()
     wave_results    = []

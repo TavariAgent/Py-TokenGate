@@ -63,10 +63,10 @@ class StickyTokenRegistry:
 
     Usage inside the queue:
 
-        # At put() time — returns the core to actually use:
+        At put() time — returns the core to actually use:
         core_id = registry.mark(op_name, token.args, candidate_core_id)
 
-        # At execution-complete time — releases the pin:
+        At execution-complete time — releases the pin:
         registry.unmark(op_name, token.args)
     """
 

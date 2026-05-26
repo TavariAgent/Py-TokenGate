@@ -126,10 +126,10 @@ class HashConductor:
     """
 
     def __init__(self) -> None:
-        self._lock    = threading.Lock()
-        self._cores:   Dict[str, int] = {}   # seed → pinned core_id
-        self._pending: Dict[str, int] = {}   # seed → outstanding token count
-        self._grace_cores: Dict[str, int] = {}  # <-- add this
+        self._lock = threading.Lock()
+        self._cores: Dict[str, int] = {}
+        self._pending: Dict[str, int] = {}
+        self._grace_cores: Dict[str, int] = {}
         self._GRACE_MAX = 256
 
     # ------------------------------------------------------------------

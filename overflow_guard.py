@@ -199,8 +199,10 @@ class OverflowGuard:
         # File writes, database ops, network requests should NOT retry
         # because the same args → same target → corruption/conflicts
         if token_tags and token_tags.get('allow_retries') == 'false':
-            tg_print('overflow', f'Skipping retry for I/O operation: {operation_type}', level='warn')
-            tg_print('overflow', 'Reason: I/O operations with same args risk data corruption', level='warn')
+            tg_print('overflow',
+                     f'Skipping retry for I/O operation: {operation_type}', level='warn')
+            tg_print('overflow',
+                     'Reason: I/O operations with same args risk data corruption', level='warn')
             return False  # ← BLOCK RETRY
 
         # Check the duration threshold
@@ -242,8 +244,10 @@ class OverflowGuard:
                 backup.current_retry_count += 1
                 backup.last_retry_at = time.time()
 
-                tg_print('overflow', f'Retry {backup.current_retry_count}/{backup.max_retries} for {token_id}')
-                tg_print('overflow', f'Bumping allocation: {new_allocation} MB (+{backup.bump_percent * 100}%)')
+                tg_print('overflow',
+                         f'Retry {backup.current_retry_count}/{backup.max_retries} for {token_id}')
+                tg_print('overflow',
+                         f'Bumping allocation: {new_allocation} MB (+{backup.bump_percent * 100}%)')
 
             else:
                 # First failure - create backup entry
@@ -287,9 +291,11 @@ class OverflowGuard:
 
                 tg_print('overflow', f'Creating backup for {token_id}')
                 tg_print('overflow', f'Complexity: {complexity_level.name}', level='debug')
-                tg_print('overflow',f'Policy: {policy.max_retries} '
-                                    f'retries @ {policy.allocation_bump_percent * 100}% bumps', level='debug')
-                tg_print('overflow', f'Initial retry allocation: {backup.current_allocation_mb} MB', level='debug')
+                tg_print('overflow',
+                         f'Policy: {policy.max_retries} 'f'retries @ '
+                         f'{policy.allocation_bump_percent * 100}% bumps', level='debug')
+                tg_print('overflow',
+                         f'Initial retry allocation: {backup.current_allocation_mb} MB', level='debug')
 
             # Create the retry token
             retry_metadata = TokenMetadata(
@@ -324,7 +330,8 @@ class OverflowGuard:
 
         # Add to pool's token dict
         global_token_pool.register_retry_token(retry_token)
-        tg_print('overflow', f'Injected retry token {retry_token.token_id} directly to pool', level='state')
+        tg_print('overflow',
+                 f'Injected retry token {retry_token.token_id} directly to pool', level='state')
 
     def record_success(self, token_id: str, execution_duration: float):
         """Record a successful retry outcome in aggregate statistics."""

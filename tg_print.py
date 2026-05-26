@@ -48,9 +48,9 @@ Level = Literal['info', 'debug', 'state', 'dispatch', 'warn', 'error']
 # ================================================================== #
 
 _DEFAULT_CHANNELS: dict[str, bool] = {
-    'gate':        True,     # admission_gate.py
+    'gate':        False,    # admission_gate.py
     'pool':        False,    # token_system.py  TokenPool
-    'token':       False,    # token_system.py  TaskToken lifecycle
+    'token':       False,     # token_system.py  TaskToken lifecycle
     'coordinator': False,    # operations_coordinator.py
     'convergence': False,    # prometheus_convergence.py --- DO NOT USE IN A REPL ---
     'worker':      False,    # core_pinned_staggered_queue.py
