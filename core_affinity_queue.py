@@ -17,18 +17,19 @@ from enum import Enum
 from typing import List
 from .tg_print import tg_print
 
+
 class TaskWeight(Enum):
     """Routing weight classes used by the affinity policy."""
-    HEAVY  = "heavy"   # High difficulty work gets Core 1+
+    HEAVY = "heavy"  # High difficulty work gets Core 1+
     MEDIUM = "medium"  # Balanced work gets Core 2+
-    LIGHT  = "light"   # Simple work gets Core 3+
+    LIGHT = "light"  # Simple work gets Core 3+
 
 
 @dataclass
 class CorePreference:
     """Allowed-core set and preferred starting core for one weight class."""
-    allowed_cores: List[int]   # Cores this weight can use
-    preferred_core: int        # First choice
+    allowed_cores: List[int]  # Cores this weight can use
+    preferred_core: int  # First choice
 
 
 class CoreAffinityPolicy:
@@ -37,6 +38,7 @@ class CoreAffinityPolicy:
     The policy derives allowed-core chains from detected physical core count
     and preserves weight isolation rules where possible.
     """
+
     def __init__(self, num_cores: int):
         self.num_cores = num_cores
         self._build_preferences()
@@ -51,12 +53,12 @@ class CoreAffinityPolicy:
         medium_cores = list(range(2, self.num_cores + 1)) if self.num_cores >= 2 else [1]
 
         # Light starts at Core 3 (NEVER Cores 1-2)
-        light_cores  = list(range(3, self.num_cores + 1)) if self.num_cores >= 3 else medium_cores
+        light_cores = list(range(3, self.num_cores + 1)) if self.num_cores >= 3 else medium_cores
 
         self.preferences = {
-            TaskWeight.HEAVY:  CorePreference(allowed_cores=heavy_cores,  preferred_core=heavy_cores[0]),
+            TaskWeight.HEAVY: CorePreference(allowed_cores=heavy_cores, preferred_core=heavy_cores[0]),
             TaskWeight.MEDIUM: CorePreference(allowed_cores=medium_cores, preferred_core=medium_cores[0]),
-            TaskWeight.LIGHT:  CorePreference(allowed_cores=light_cores,  preferred_core=light_cores[0]),
+            TaskWeight.LIGHT: CorePreference(allowed_cores=light_cores, preferred_core=light_cores[0]),
         }
 
         tg_print('affinity', f'Policy built for {self.num_cores} cores')
@@ -82,6 +84,7 @@ class CoreAffinityQueue:
 
     It does not place tokens into mailboxes directly.
     """
+
     def __init__(self, topology, workers_per_core: int = 4):
         self.topology = topology
         self.workers_per_core = workers_per_core
@@ -116,9 +119,9 @@ class CoreAffinityQueue:
         return {
             f'core_{core_id}': (
                 {
-                    'heavy':       (counts['heavy']  / total) * 100,
-                    'medium':      (counts['medium'] / total) * 100,
-                    'light':       (counts['light']  / total) * 100,
+                    'heavy': (counts['heavy'] / total) * 100,
+                    'medium': (counts['medium'] / total) * 100,
+                    'light': (counts['light'] / total) * 100,
                     'total_tasks': total,
                 }
                 if (total := sum(counts.values())) > 0 else
@@ -130,11 +133,11 @@ class CoreAffinityQueue:
     def get_stats(self) -> dict:
         """Return a composite snapshot of affinity configuration and routing totals."""
         return {
-            'num_cores':              self.num_cores,
-            'workers_per_core':       self.workers_per_core,
-            'total_routed':           self.total_routed,
-            'routing_failures':       self.routing_failures,
-            'affinity_distribution':  self.get_affinity_report(),
+            'num_cores': self.num_cores,
+            'workers_per_core': self.workers_per_core,
+            'total_routed': self.total_routed,
+            'routing_failures': self.routing_failures,
+            'affinity_distribution': self.get_affinity_report(),
         }
 
     # TODO: Add this to the dashboard in a live core viewer

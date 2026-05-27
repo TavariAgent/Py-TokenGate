@@ -116,6 +116,7 @@ R = TypeVar("R")
 
 class TaskToken(Generic[T]):
     """Represents a deferred task submission managed by the token system."""
+
     def __init__(
             self,
             token_id: str,
@@ -474,7 +475,6 @@ class TaskToken(Generic[T]):
         self._killed_reason = reason
 
         if self.transition_state(TokenState.KILLED):
-
             # Set exception in future
             self._result_future.set_exception(
                 TaskKilledException(f"Token killed: {reason}")
@@ -533,6 +533,7 @@ class TokenPool:
     Token creation is synchronous and immediate; execution is deferred until
     a coordinator retrieves and admits the token.
     """
+
     def __init__(self):
         self.quarantine_mgr = None
         self.tokens: Dict[str, TaskToken[Any]] = {}
@@ -738,12 +739,12 @@ class TokenPool:
         """Get current metrics about the token pool."""
         tokens_by_state = {s.value: len(self.get_tokens_by_state(s)) for s in TokenState}
         return {
-            'total_created':   self.total_created,
-            'total_killed':    self.total_killed,
-            'total_admitted':  self.total_admitted,
-            'current_tokens':  len(self.tokens),
+            'total_created': self.total_created,
+            'total_killed': self.total_killed,
+            'total_admitted': self.total_admitted,
+            'current_tokens': len(self.tokens),
             'tokens_by_state': tokens_by_state,
-            'paused':          not self._paused.is_set(),
+            'paused': not self._paused.is_set(),
         }
 
     @staticmethod
@@ -760,8 +761,8 @@ class TokenPool:
 # DECORATOR - The user-facing API
 # ============================================================================
 def task_token_guard(
-    operation_type: Optional[str] = None,
-    tags: Optional[Dict[str, Any]] = None,
+        operation_type: Optional[str] = None,
+        tags: Optional[Dict[str, Any]] = None,
 ) -> Callable[[Callable[P, R]], Callable[P, "TaskToken[R]"]]:
     """Decorate a callable so calls return TaskToken instead of executing immediately.
 
@@ -785,6 +786,7 @@ def task_token_guard(
         The wrapped callable is not executed at call time. It is captured as a
         token-managed task for later admission and execution.
     """
+
     def decorator(func: Callable[P, R]) -> Callable[P, "TaskToken[R]"]:
         @wraps(func)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> "TaskToken[R]":
@@ -794,7 +796,7 @@ def task_token_guard(
             if not hasattr(wrapper, "cached_metrics"):
                 wrapper.cached_metrics = CodeInspector.analyze(func)
             metrics = wrapper.cached_metrics
-            final_tags = dict(tags) if tags else {} # Immutable
+            final_tags = dict(tags) if tags else {}  # Immutable
             final_func = func
 
             # Check Guard House for spike detection
@@ -810,7 +812,8 @@ def task_token_guard(
                         method_name=func.__name__,
                         operation_type=operation_type,
                         predicted_complexity=metrics.complexity_score,
-                        historical_avg_complexity=spike_detector.guard_house.get_reputation(func.__name__).avg_complexity_score,
+                        historical_avg_complexity=spike_detector.guard_house.get_reputation(
+                            func.__name__).avg_complexity_score,
                         deviation_percent=deviation,
                         args=args,
                         kwargs=kwargs,

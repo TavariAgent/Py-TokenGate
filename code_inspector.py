@@ -118,7 +118,7 @@ class CodeInspector:
         expensive = {'numpy', 'pandas', 'scipy', 'requests', 'urllib', 'exec', 'eval', 'compile'}
         flagged = [c for c in external_calls if any(e in c for e in expensive)]
         if flagged:
-            tg_print('overflow',f'{func_name} references expensive externals: {flagged}', level='warn')
+            tg_print('overflow', f'{func_name} references expensive externals: {flagged}', level='warn')
 
         # Analyze control flow
         loop_count = CodeInspector._estimate_loops(code)
@@ -138,17 +138,17 @@ class CodeInspector:
         complexity_level = CodeInspector._classify_complexity(complexity_score)
 
         if complexity_level == ComplexityLevel.EXTREME:
-            tg_print('overflow',f'{func_name} '
-                                f'classified EXTREME (score={complexity_score:.1f}) '
-                                f'allocation multiplier 4x', level='warn')
+            tg_print('overflow', f'{func_name} '
+                                 f'classified EXTREME (score={complexity_score:.1f}) '
+                                 f'allocation multiplier 4x', level='warn')
 
         # Calculate confidence
         confidence = CodeInspector._calculate_confidence(complexity_score)
 
         tg_print('overflow', f'Inspected {func_name}  '
-                        f'complexity={complexity_level.name}  '
-                        f'score={complexity_score:.1f}  '
-                        f'confidence={confidence}%', level='debug')
+                             f'complexity={complexity_level.name}  '
+                             f'score={complexity_score:.1f}  '
+                             f'confidence={confidence}%', level='debug')
 
         return CodeMetrics(
             func_name=func_name,

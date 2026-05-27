@@ -335,7 +335,7 @@ class QuarantineManager:
             return quarantined
 
     @staticmethod
-    def _summarize_args(args: tuple[Any, ...],) -> str:
+    def _summarize_args(args: tuple[Any, ...], ) -> str:
         """Create a brief summary of args."""
         if not args:
             return "No args"
@@ -355,7 +355,7 @@ class QuarantineManager:
         return ", ".join(summary_parts)
 
     @staticmethod
-    def _serialize_args(args: tuple[Any, ...],) -> str:
+    def _serialize_args(args: tuple[Any, ...], ) -> str:
         """Serialize args to string (with size limits)."""
         try:
             # Try JSON serialization

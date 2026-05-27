@@ -98,7 +98,7 @@ class StickyTokenRegistry:
                     level="dispatch",
                 )
                 return core_id
-            
+
             existing_core = self._markers[key].core_id
             if existing_core != core_id:
                 tg_print(

@@ -16,6 +16,7 @@ from .tg_print import tg_print
 
 class AdmissionGate:
     """Pass-through admission layer between the token pool and worker queue."""
+
     def __init__(
             self,
             token_pool: TokenPool,
@@ -73,7 +74,7 @@ class AdmissionGate:
                 break
             except Exception as e:
                 tg_print('gate', f'Error in admission loop: {e}', level='error')
-                await asyncio.sleep(0.1) # Breif pause only on errors!
+                await asyncio.sleep(0.1)  # Breif pause only on errors!
 
     async def _admit_token(self, token: TaskToken):
         """Transition a token into the admitted state and enqueue it for execution."""
@@ -87,7 +88,7 @@ class AdmissionGate:
                 level='warn',
             )
             return
-        
+
         # Route to worker queue
         await self.worker_queue.put(token)
 

@@ -73,7 +73,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         self.core_busy: Dict[int, int] = {c: 0 for c in range(1, self.num_cores + 1)}
 
         # Capped mailbox length to prevent runaway memory (DOS safety)
-        self.MAILBOX_MAX = 45 # Max tokens per worker mailbox
+        self.MAILBOX_MAX = 45  # Max tokens per worker mailbox
 
         self.core_patterns: Dict[int, int] = {}
         for core_id in range(1, num_cores + 1):
@@ -280,7 +280,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
                         complexity_score=token.metadata.tags.get('complexity_score')
                     )
 
-        conductor.on_complete(token) # Fixed position
+        conductor.on_complete(token)  # Fixed position
 
         # Release the sticky-core pin so the next token for this
         # (op, args) key can be freely routed again.
@@ -380,7 +380,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
     def choose_worker_for_core(self, core_id: int) -> int:
         """Choose the least-loaded active worker slot for the given core."""
         active = self.core_patterns.get(core_id, self.workers_per_core)
-        base   = (core_id - 1) * self.workers_per_core
+        base = (core_id - 1) * self.workers_per_core
         return min(range(active), key=lambda i: self.worker_queue_sizes[base + i])
 
     def assign_worker_positions(self, worker_id: str, worker_index: int, core_id: int):
@@ -423,7 +423,7 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
         self.core_position_counters[chosen_core] += 1
 
         tg_print('worker', f'Routed {token.token_id}  weight={weight.value}  '
-                            f'pos={position}  core={chosen_core}  pattern={active_workers}', level='dispatch')
+                           f'pos={position}  core={chosen_core}  pattern={active_workers}', level='dispatch')
         return position
 
     async def put(self, token: "TaskToken"):
@@ -539,7 +539,13 @@ class CorePinnedStaggeredQueue(WorkerTaskQueue):
 
         tg_print('worker', f'Started {self.total_workers} workers across {self.num_cores} cores')
 
-    async def _worker_loop(self, worker_idx: int, worker_id: str, core_id: int, local_i: int): # Don't del "worker_idx"!
+    async def _worker_loop(
+            self,
+            worker_idx: int,
+            worker_id: str,
+            core_id: int,
+            local_i: int
+    ):  # Don't del "worker_idx"!
         """Continuously consume one mailbox and execute admitted tokens."""
         q = self.mailboxes[(core_id, local_i)]
         tg_print('worker', f'{worker_id} started  core={core_id}  local={local_i}', level='state')

@@ -72,7 +72,6 @@ from .sticky_token import freeze, sticky_registry
 from .unhashable_checker import DigestPolicy
 from .tg_print import tg_print
 
-
 # ---------------------------------------------------------------------------
 # Thread-local active seed
 # ---------------------------------------------------------------------------
@@ -150,10 +149,10 @@ class HashConductor:
                       Collisions are benign but shift load distribution —
                       see module docstring for full collision semantics.
         """
-        token_id       = getattr(token, "token_id", id(token))
+        token_id = getattr(token, "token_id", id(token))
         external_calls = (
-            getattr(token.metadata, "external_calls", None)
-            or token.metadata.tags.get("external_calls", "")
+                getattr(token.metadata, "external_calls", None)
+                or token.metadata.tags.get("external_calls", "")
         )
         raw = f"{token_id}:{freeze(external_calls)}".encode()
 
@@ -206,8 +205,8 @@ class HashConductor:
         core_id = sticky_registry.mark(seed, (), candidate_core)
 
         with self._lock:
-            self._cores[seed]   = core_id
-            self._pending[seed] = 1   # lead token counts toward the domain
+            self._cores[seed] = core_id
+            self._pending[seed] = 1  # lead token counts toward the domain
 
         tg_print(
             "conductor",

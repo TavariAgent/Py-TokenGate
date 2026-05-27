@@ -142,6 +142,7 @@ class GuardHouse:
     exposes developer-facing diagnostics, and can enforce pre-execution
     blocking when a method exceeds the configured danger threshold.
     """
+
     def __init__(self, auto_block_dangerous: bool = True):
         """
          Initialize Guard House.
@@ -244,10 +245,10 @@ class GuardHouse:
                 if failure_rate > 90.0 and rep.total_attempts >= 10:
                     if method_name not in self.blocked_methods:
                         self.blocked_methods.add(method_name)
-                        tg_print('guard',f'AUTO-BLOCKED: {method_name}', level='warn')
-                        tg_print('guard',f'Failure rate: {failure_rate:.1f}% '
-                                         f'({rep.failed_executions}/{rep.total_attempts})', level='warn')
-                        tg_print('guard','This method will be rejected on future calls', level='warn')
+                        tg_print('guard', f'AUTO-BLOCKED: {method_name}', level='warn')
+                        tg_print('guard', f'Failure rate: {failure_rate:.1f}% '
+                                          f'({rep.failed_executions}/{rep.total_attempts})', level='warn')
+                        tg_print('guard', 'This method will be rejected on future calls', level='warn')
 
     def check_method_allowed(self, func: Callable):
         """
@@ -357,7 +358,8 @@ class GuardHouse:
             print("🟢 EXCELLENT PERFORMERS (>95% success):")
             for rep in excellent[:5]:
                 print(f"  ├─ {rep.method_name}")
-                print(f"  │  Rate: {rep.get_completion_rate():.1f}% ({rep.successful_completions}/{rep.total_attempts})")
+                print(
+                    f"  │  Rate: {rep.get_completion_rate():.1f}% ({rep.successful_completions}/{rep.total_attempts})")
                 print(f"  │  Avg time: {rep.get_avg_execution_time():.2f}s")
                 print(f"  │")
             if len(excellent) > 5:
@@ -369,7 +371,8 @@ class GuardHouse:
             print("🟢 HEALTHY METHODS (80-95% success):")
             for rep in healthy[:5]:
                 print(f"  ├─ {rep.method_name}")
-                print(f"  │  Rate: {rep.get_completion_rate():.1f}% ({rep.successful_completions}/{rep.total_attempts})")
+                print(
+                    f"  │  Rate: {rep.get_completion_rate():.1f}% ({rep.successful_completions}/{rep.total_attempts})")
                 print(f"  │  Avg time: {rep.get_avg_execution_time():.2f}s")
                 print(f"  │")
             if len(healthy) > 5:
@@ -381,7 +384,8 @@ class GuardHouse:
             print("🟡 AT RISK (50-80% success) - Needs Attention:")
             for rep in at_risk:
                 print(f"  ├─ {rep.method_name}")
-                print(f"  │  Rate: {rep.get_completion_rate():.1f}% ({rep.successful_completions}/{rep.total_attempts})")
+                print(
+                    f"  │  Rate: {rep.get_completion_rate():.1f}% ({rep.successful_completions}/{rep.total_attempts})")
                 print(f"  │  Timeouts: {rep.timeout_count}, Errors: {rep.error_count}")
                 print(f"  │  Action: {rep.get_recommendation()}")
                 print(f"  │")
@@ -392,7 +396,8 @@ class GuardHouse:
             print("🔴 PROBLEMATIC (<50% success) - Requires Immediate Attention:")
             for rep in problematic:
                 print(f"  ├─ {rep.method_name}")
-                print(f"  │  Rate: {rep.get_completion_rate():.1f}% ({rep.successful_completions}/{rep.total_attempts})")
+                print(
+                    f"  │  Rate: {rep.get_completion_rate():.1f}% ({rep.successful_completions}/{rep.total_attempts})")
                 print(f"  │  Timeouts: {rep.timeout_count}, Errors: {rep.error_count}")
                 print(f"  │  Max time: {rep.max_execution_time:.2f}s")
                 print(f"  │  ⚠️  ACTION REQUIRED: {rep.get_recommendation()}")

@@ -85,7 +85,6 @@ class StorageThrottle:
         self.total_operations = 0
         self.total_wait_time = 0.0
 
-
     def throttle(self, func: Callable, *args, **kwargs) -> Any:
         """
         Execute a function with I/O throttling.

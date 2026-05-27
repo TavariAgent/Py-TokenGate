@@ -53,6 +53,7 @@ class WorkerPoolInterface:
     This wrapper provides pool size information and pattern-control hooks
     without exposing the full worker queue implementation.
     """
+
     def __init__(self, worker_queue: 'CorePinnedStaggeredQueue'):
         self.worker_queue = worker_queue
         self.num_cores = worker_queue.num_cores
@@ -71,18 +72,20 @@ class WorkerPoolInterface:
             'workers_per_core': self.workers_per_core
         }
 
+
 class OperationsCoordinator:
     """Owns runtime startup, component wiring, and orderly shutdown."""
+
     def __init__(
             self,
-            workers_per_core:       int  = 4,
-            enable_convergence:     bool = True,
-            base_memory_budget_mb:  int  = 65, # For memory pre-warming (doesn't effect the operation memory costs.)
-            num_executors:          int  = 4,
-            auto_block_dangerous:   bool = False,
+            workers_per_core: int = 4,  # Don't change this! For maximum performance look at convergence settings
+            enable_convergence: bool = True,
+            base_memory_budget_mb: int = 65,  # For memory pre-warming (doesn't effect the operation memory costs.)
+            num_executors: int = 4,
+            auto_block_dangerous: bool = False,
     ):
         tg_print('coordinator', '=' * 60)
-        tg_print('coordinator','Initializing...')
+        tg_print('coordinator', 'Initializing...')
         tg_print('coordinator', '=' * 60)
 
         self.workers_per_core = workers_per_core
@@ -110,7 +113,7 @@ class OperationsCoordinator:
         # Metrics
         self.metrics = get_metrics()
 
-        self.recent_executions = deque(maxlen=100) # ← Tune for micro performance gains
+        self.recent_executions = deque(maxlen=100)  # ← Tune for micro performance gains
         self._executions_lock = threading.RLock()  # ← RLock for safety!
 
         tg_print('coordinator', 'Overflow guard initialized')
@@ -281,19 +284,18 @@ class OperationsCoordinator:
         tg_print('coordinator', 'Stopping...')
         self._active = False
 
-
         # Stop convergence first
         if self._convergence_task:
             asyncio.run_coroutine_threadsafe(
-                self._stop_convergence(), self._event_loop # Type: Ignore
+                self._stop_convergence(), self._event_loop  # Type: Ignore
             ).result(timeout=5.0)
 
         asyncio.run_coroutine_threadsafe(
-            self._stop_execution(), self._event_loop # Type: Ignore
+            self._stop_execution(), self._event_loop  # Type: Ignore
         ).result(timeout=5.0)
 
         # Stop event loop
-        self._event_loop.call_soon_threadsafe(self._event_loop.stop) # Type: Ignore safe tuple
+        self._event_loop.call_soon_threadsafe(self._event_loop.stop)  # Type: Ignore safe tuple
 
         if self._loop_thread:
             self._loop_thread.join(timeout=5.0)

@@ -48,18 +48,18 @@ Level = Literal['info', 'debug', 'state', 'dispatch', 'warn', 'error']
 # ================================================================== #
 
 _DEFAULT_CHANNELS: dict[str, bool] = {
-    'gate':        False,    # admission_gate.py
-    'pool':        False,    # token_system.py  TokenPool
-    'token':       False,     # token_system.py  TaskToken lifecycle
-    'coordinator': False,    # operations_coordinator.py
-    'convergence': False,    # prometheus_convergence.py --- DO NOT USE IN A REPL ---
-    'worker':      False,    # core_pinned_staggered_queue.py
-    'storage':     False,    # storage_throttle.py
-    'guard':       False,    # guard_house.py
-    'overflow':    False,    # overflow_guard.py
-    'affinity':    False,    # core_affinity_queue.py  (verbose — off by default)
-    'sticky':      False,    # sticky_token.py
-    'conductor':   False,    # hash_conductor.py
+    'gate': False,  # admission_gate.py
+    'pool': False,  # token_system.py  TokenPool
+    'token': False,  # token_system.py  TaskToken lifecycle
+    'coordinator': False,  # operations_coordinator.py
+    'convergence': False,  # prometheus_convergence.py --- DO NOT USE IN A REPL ---
+    'worker': False,  # core_pinned_staggered_queue.py
+    'storage': False,  # storage_throttle.py
+    'guard': False,  # guard_house.py
+    'overflow': False,  # overflow_guard.py
+    'affinity': False,  # core_affinity_queue.py  (verbose — off by default)
+    'sticky': False,  # sticky_token.py
+    'conductor': False,  # hash_conductor.py
 }
 
 # Per-channel debug flag — channels only show 'debug' level when True
@@ -80,43 +80,43 @@ class TGPrint:
     shares the same flags.
     """
 
-    enabled:  bool             = True
-    channels: dict[str, bool]  = dict(_DEFAULT_CHANNELS)
-    debug:    dict[str, bool]  = dict(_DEBUG_CHANNELS)
-    _lock:    threading.Lock   = threading.Lock()
+    enabled: bool = True
+    channels: dict[str, bool] = dict(_DEFAULT_CHANNELS)
+    debug: dict[str, bool] = dict(_DEBUG_CHANNELS)
+    _lock: threading.Lock = threading.Lock()
 
     # Level prefixes — kept short so output stays scannable
     _PREFIXES: dict[str, str] = {
-        'info':     '',
-        'debug':    '  [dbg] ',
-        'state':    '  [->]  ',
+        'info': '',
+        'debug': '  [dbg] ',
+        'state': '  [->]  ',
         'dispatch': '  [||]  ',
-        'warn':     '  [!]   ',
-        'error':    '  [!!]  ',
+        'warn': '  [!]   ',
+        'error': '  [!!]  ',
     }
 
     # Channel display tags — right-padded for alignment
     _TAGS: dict[str, str] = {
-        'gate':        '[GATE]       ',
-        'pool':        '[POOL]       ',
-        'token':       '[TOKEN]      ',
+        'gate': '[GATE]       ',
+        'pool': '[POOL]       ',
+        'token': '[TOKEN]      ',
         'coordinator': '[COORD]      ',
         'convergence': '[CONVERGENCE]',
-        'worker':      '[WORKER]     ',
-        'storage':     '[STORAGE]    ',
-        'guard':       '[GUARD]      ',
-        'overflow':    '[OVERFLOW]   ',
-        'affinity':    '[AFFINITY]   ',
-        'sticky':      '[STICKY]     ',
-        'conductor':   '[CONDUCTOR]  ',
+        'worker': '[WORKER]     ',
+        'storage': '[STORAGE]    ',
+        'guard': '[GUARD]      ',
+        'overflow': '[OVERFLOW]   ',
+        'affinity': '[AFFINITY]   ',
+        'sticky': '[STICKY]     ',
+        'conductor': '[CONDUCTOR]  ',
     }
 
     @classmethod
     def out(
-        cls,
-        channel: str,
-        message: str,
-        level:   Level = 'info',
+            cls,
+            channel: str,
+            message: str,
+            level: Level = 'info',
     ) -> None:
         """
         Write a message if global and channel flags permit.
@@ -132,15 +132,15 @@ class TGPrint:
         if level == 'debug' and not cls.debug.get(channel, False):
             return
 
-        tag    = cls._TAGS.get(channel, f'[{channel.upper():<11}]')
+        tag = cls._TAGS.get(channel, f'[{channel.upper():<11}]')
         prefix = cls._PREFIXES.get(level, '')
-        line   = f"{tag}{prefix}{message}"
+        line = f"{tag}{prefix}{message}"
 
         with cls._lock:
             try:
                 print(line, flush=True)
             except Exception:
-                pass    # never crash a worker thread over a print
+                pass  # never crash a worker thread over a print
 
     # ------------------------------------------------------------------ #
     # Convenience controls

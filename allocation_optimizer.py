@@ -155,8 +155,8 @@ class AllocationOptimizer:
 
             tg_print('overflow', f'Optimizer initialized: {operation_name}', level='debug')
             tg_print('overflow', f'Complexity: {metrics.complexity_level.name}  '
-                     f'baseline={allocation.baseline_allocation_mb} MB  '
-                     f'confidence={allocation.baseline_confidence}%', level='debug')
+                                 f'baseline={allocation.baseline_allocation_mb} MB  '
+                                 f'confidence={allocation.baseline_confidence}%', level='debug')
 
             return allocation
 
